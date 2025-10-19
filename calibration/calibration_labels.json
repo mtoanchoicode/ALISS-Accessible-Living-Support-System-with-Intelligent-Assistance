@@ -1,0 +1,27 @@
+[
+  {
+    "room": "living_room",
+    "start": 0.0,
+    "end": 8.56
+  },
+  {
+    "room": "dining_room",
+    "start": 8.56,
+    "end": 20.400000000000002
+  },
+  {
+    "room": "kitchen",
+    "start": 20.400000000000002,
+    "end": 47.84
+  },
+  {
+    "room": "bedroom",
+    "start": 47.84,
+    "end": 60.0
+  },
+  {
+    "room": "study_room",
+    "start": 60.0,
+    "end": 72.96000000000001
+  }
+]
