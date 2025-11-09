@@ -45,10 +45,87 @@ def upsert_item(ts, location, obj, background, text):
 
 if __name__ == "__main__":
     rows = [
-        (datetime.now(timezone.utc), "kitchen", "wallet", "Left on dining table near a blue notebook.", "Wallet near notebook on table."),
-        (datetime.now(timezone.utc), "bedroom", "keys", "Hanging on the hook by the door.", "House keys on the wall hook by the door."),
-        (datetime.now(timezone.utc), "living_room", "remote", "Between sofa cushions.", "TV remote wedged in sofa.")
-    ]
+    (datetime(2025, 11, 6, 7, 45), "bedroom", "phone",
+     "Charging on the nightstand beside a stack of books.",
+     "Smartphone connected to charger on the nightstand next to a small pile of books."),
+    
+    (datetime(2025, 11, 6, 8, 10), "kitchen", "glasses",
+     "Left near the fruit bowl on the counter.",
+     "Reading glasses resting beside the fruit bowl on the kitchen counter."),
+    
+    (datetime(2025, 11, 6, 8, 35), "living_room", "remote",
+     "Placed on the armrest of the recliner.",
+     "TV remote lying on the right armrest of the recliner chair."),
+    
+    (datetime(2025, 11, 6, 9, 00), "office", "keys",
+     "Next to the coffee mug near the keyboard.",
+     "House keys beside the coffee mug on the office desk."),
+    
+    (datetime(2025, 11, 6, 9, 20), "garage", "toolbox",
+     "Under the wooden shelf near the ladder.",
+     "Red toolbox stored beneath the wooden shelf beside the ladder."),
+    
+    (datetime(2025, 11, 6, 9, 45), "bathroom", "toothpaste",
+     "Next to the electric toothbrush on the sink counter.",
+     "Toothpaste tube placed beside the electric toothbrush on the sink."),
+    
+    (datetime(2025, 11, 6, 10, 00), "garden", "watering can",
+     "Behind the potted ferns close to the fence.",
+     "Metal watering can resting behind the large potted ferns near the fence."),
+    
+    (datetime(2025, 11, 6, 10, 30), "kitchen", "mug",
+     "On the drying rack beside the sink.",
+     "Blue ceramic mug drying on the rack beside the kitchen sink."),
+    
+    (datetime(2025, 11, 6, 10, 55), "living_room", "book",
+     "On the coffee table under the lamp.",
+     "Hardcover book titled 'AI for Everyone' sitting on the coffee table under the lamp."),
+    
+    (datetime(2025, 11, 6, 11, 10), "bedroom", "wallet",
+     "Inside the drawer of the dressing table.",
+     "Brown leather wallet tucked inside the dressing table drawer."),
+    
+    (datetime(2025, 11, 6, 11, 35), "office", "notebook",
+     "Open next to the mouse pad.",
+     "Spiral notebook lying open beside the mouse pad on the office desk."),
+    
+    (datetime(2025, 11, 6, 12, 00), "garage", "bicycle helmet",
+     "Hanging from the handlebar of the bicycle.",
+     "Black bicycle helmet dangling from the bike handlebar near the garage door."),
+    
+    (datetime(2025, 11, 6, 12, 30), "living_room", "tablet",
+     "On the sofa cushion beside a throw blanket.",
+     "Tablet resting on the sofa cushion next to a folded blanket."),
+    
+    (datetime(2025, 11, 6, 13, 00), "kitchen", "knife",
+     "Drying on the rack near the cutting board.",
+     "Chef’s knife placed on the drying rack beside the wooden cutting board."),
+    
+    (datetime(2025, 11, 6, 13, 45), "bedroom", "earphones",
+     "Coiled near the edge of the bed.",
+     "White earphones coiled neatly near the edge of the bedspread."),
+    
+    (datetime(2025, 11, 6, 14, 10), "office", "pen",
+     "Next to the notepad under the desk lamp.",
+     "Blue ink pen lying beside the notepad under the office desk lamp."),
+    
+    (datetime(2025, 11, 6, 14, 45), "garden", "gloves",
+     "Hanging from the edge of a flowerpot.",
+     "Pair of gardening gloves hanging over the rim of a large flowerpot."),
+    
+    (datetime(2025, 11, 6, 15, 15), "bathroom", "towel",
+     "Hung on the back of the door.",
+     "Clean white towel hanging on the hook behind the bathroom door."),
+    
+    (datetime(2025, 11, 6, 15, 45), "living_room", "laptop",
+     "Closed on the side table near the sofa.",
+     "Laptop computer closed and placed on the small side table beside the sofa."),
+    
+    (datetime(2025, 11, 6, 16, 10), "kitchen", "water bottle",
+     "On the top shelf of the fridge door.",
+     "Reusable stainless-steel water bottle kept on the top rack of the refrigerator door.")
+     ]
+    
     for r in rows:
         upsert_item(*r)
     print(f"Ingested {len(rows)} rows.")
