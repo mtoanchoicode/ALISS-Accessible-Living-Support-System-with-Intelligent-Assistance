@@ -12,10 +12,9 @@ from sentence_transformers import SentenceTransformer
 from transformers import CLIPSegProcessor, CLIPSegForImageSegmentation, AutoModelForCausalLM, AutoTokenizer
 import torchvision.models as models
 import torchvision.transforms as transforms
-import threading
-import threading
 from dotenv import load_dotenv
 import os
+import threading, queue, time
 
 load_dotenv()  # Loads .env file
 
@@ -57,7 +56,7 @@ class WorldScribeCaptioning:
         # Initialize Moondream for spatial descriptions
         print("Loading Moondream model...")
         try:
-            model_id = "vikhyatk/moondream2"
+            model_id = "vikhyatk/moondream" #moondream2
             revision = "2024-08-26"
             self.moondream_model = AutoModelForCausalLM.from_pretrained(
                 model_id, 
@@ -99,8 +98,8 @@ class WorldScribeCaptioning:
             self.depth_model = None
         
         # Keyframe extraction parameters
-        self.n = 5  # consecutive frames threshold
-        self.k = 3  # interest indication threshold
+        self.n = 50  # consecutive frames threshold
+        self.k = 30  # interest indication threshold
         self.thresh_sim = 0.6  # similarity threshold
         self.orientation_threshold = 30  # degrees
         
@@ -124,8 +123,42 @@ class WorldScribeCaptioning:
         
         # User intent (can be modified)
         self.user_intent = "Describe the environment with focus on objects and their spatial relationships"
+
+        # Price optimize
+        self.gpt_cooldown = 30  # seconds, adjust as needed
+        self.last_gpt_time = 0
         
         print("Initialization complete!\n")
+
+        self.frame_queue = queue.Queue(maxsize=2)      # keep only the newest
+        self.result_ready = threading.Event()
+        self.latest_result = None
+        self.worker = threading.Thread(target=self._worker_loop, daemon=True)
+        self.worker.start()
+
+    # ------------------------------------------------------------------
+    # 1. CAPTURE THREAD (runs in run_camera_2)
+    # ------------------------------------------------------------------
+    def _enqueue_latest(self, frame, idx):
+        # drop old frames – only the newest matters
+        while self.frame_queue.qsize() > 0:
+            try: self.frame_queue.get_nowait()
+            except queue.Empty: break
+        self.frame_queue.put((frame.copy(), idx))
+
+    # ------------------------------------------------------------------
+    # 2. WORKER THREAD (heavy processing)
+    # ------------------------------------------------------------------
+    def _worker_loop(self):
+        while True:
+            frame, idx = self.frame_queue.get()   # blocks until a frame arrives
+            self.result_ready.clear()
+            is_key, result = self.process_frame(frame, idx)   # ← SAME function as before
+            if is_key:
+                with self.display_lock:
+                    self.latest_result = result
+                self.result_ready.set()
+            self.frame_queue.task_done()
     
     def extract_features_vgg16(self, frame):
         """
@@ -216,48 +249,76 @@ class WorldScribeCaptioning:
     def is_keyframe(self, frame, objects, frame_idx):
         """
         Keyframe Extraction Layer - determine if current frame is a keyframe
-        Based on: object composition consistency and visual similarity
+        Returns: (is_keyframe: bool, detail_level: str)
         """
         composition_key = self.get_object_composition_key(objects)
         self.object_composition_buffer.append(composition_key)
         self.frame_buffer.append(frame)
         
-        # Need at least n frames to make decision
+        current_time = time.time()
+
+        # Need at least n frames
         if len(self.object_composition_buffer) < self.n:
             return False, "normal"
         
-        # Check if object composition is consistent across n frames
         compositions = list(self.object_composition_buffer)
-        
-        # Case 1: Consistent non-empty composition
-        if all(comp == compositions[0] and comp is not None for comp in compositions):
+        first_comp = compositions[0]
+
+        # === CASE 1: STABLE NON-EMPTY SCENE ===
+        if all(comp == first_comp and comp is not None for comp in compositions):
             self.consecutive_keyframes += 1
-            # Check if user is interested (k consecutive keyframes)
-            if self.consecutive_keyframes >= self.k:
-                return True, "verbose"  # User interested, request detailed description
-            return True, "normal"
-        
-        # Case 2: All empty compositions (no objects detected)
+
+            # First time we detect user interest (k stable frames)
+            if self.consecutive_keyframes == self.k:
+                self.last_gpt_time = current_time
+                return True, "verbose"  # Trigger full GPT
+
+            # After GPT, enter cooldown (only YOLO + Moondream)
+            if (self.consecutive_keyframes > self.k and 
+                current_time - self.last_gpt_time < self.gpt_cooldown):
+                return True, "normal"  # Keyframe but NO GPT
+
+            # Cooldown expired → allow next GPT
+            if current_time - self.last_gpt_time >= self.gpt_cooldown:
+                self.last_gpt_time = current_time
+                return True, "verbose"
+
+            return True, "normal"  # Stable, but cooldown active
+
+        # === CASE 2: STABLE EMPTY SCENE (no objects) ===
         if all(comp is None for comp in compositions):
-            # Check visual similarity with previous keyframe
-            if self.prev_keyframe is not None:
-                current_features = self.extract_features_vgg16(frame)
-                prev_features = self.extract_features_vgg16(self.prev_keyframe)
-                cos_sim = self.compute_cosine_similarity(current_features, prev_features)
-                
-                if cos_sim < self.thresh_sim:
-                    self.consecutive_keyframes = 0
-                    return True, "normal"
-            else:
+            self.consecutive_keyframes += 1
+
+            if self.prev_keyframe is None:
+                self.last_gpt_time = current_time
                 return True, "normal"
-        
-        # Case 3: Inconsistent compositions (camera drifting/moving objects)
-        if len(set(compositions)) == len(compositions) and all(comp is not None for comp in compositions):
-            # Check every 2k frame
+
+            # Compare visual similarity
+            current_features = self.extract_features_vgg16(frame)
+            prev_features = self.extract_features_vgg16(self.prev_keyframe)
+            cos_sim = self.compute_cosine_similarity(current_features, prev_features)
+
+            if cos_sim > self.thresh_sim:  # Very similar → not a change
+                if current_time - self.last_gpt_time < self.gpt_cooldown:
+                    return False, "normal"  # SKIP FULL PROCESSING
+                else:
+                    self.last_gpt_time = current_time
+                    return True, "normal"
+
+            # Visual change → treat as new keyframe
+            self.last_gpt_time = current_time
+            return True, "normal"
+
+        # === CASE 3: INCONSISTENT (moving/changing) ===
+        unique_comps = set(c for c in compositions if c is not None)
+        if len(unique_comps) > 1:
+            # Scene is changing → sample periodically
             if frame_idx % (2 * self.k) == 0:
-                self.consecutive_keyframes = 0
-                return True, "concise"  # Concise for fast-changing scenes
-        
+                self.last_gpt_time = current_time
+                return True, "concise"
+            return False, "normal"  # Skip non-sampled changing frames
+
+        # Default: not enough data or edge case
         self.consecutive_keyframes = 0
         return False, "normal"
     
@@ -309,26 +370,44 @@ class WorldScribeCaptioning:
                 return f"The scene shows {', '.join(unique_objects[:3])} and other objects"
         
         try:
-            # Convert frame to PIL Image
+            print("[Moondream] Starting generation...")
+            print(f"Model type: {type(self.moondream_model)}")
+            print(f"Tokenizer type: {type(self.moondream_tokenizer)}")
+
+            # Step 1: Convert frame to PIL Image
+            print("[Moondream] Converting frame to RGB PIL image...")
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            pil_image = Image.fromarray(frame_rgb)
-            
-            # Encode image
+            pil_image = Image.fromarray(frame_rgb.astype("uint8"))
+            print(f"[Moondream] Image mode: {pil_image.mode}, size: {pil_image.size}")
+
+            # Step 2: Encode image
+            if not hasattr(self.moondream_model, "encode_image"):
+                print("[Moondream ERROR] encode_image() missing from model!")
+            else:
+                print("[Moondream] Encoding image...")
             enc_image = self.moondream_model.encode_image(pil_image)
-            
-            # Generate description focusing on spatial relationships
+            print("[Moondream] Image encoded successfully.")
+
+            # Step 3: Ask question
             prompt = "Describe the objects in this image and their spatial relationships in one sentence."
-            
+            print(f"[Moondream] Asking question: {prompt}")
+
+            if not hasattr(self.moondream_model, "answer_question"):
+                print("[Moondream ERROR] answer_question() missing from model!")
+
             description = self.moondream_model.answer_question(
-                enc_image, 
-                prompt, 
+                enc_image,
+                prompt,
                 self.moondream_tokenizer
             )
-            
+
+            print("[Moondream] Got description:", description)
             return description
-            
+
         except Exception as e:
-            print(f"Moondream error: {e}")
+            import traceback
+            print("❌ Moondream error:", e)
+            traceback.print_exc()  # prints full stack trace for detailed context
             return "Error generating spatial description"
     
     def generate_gpt4v_description(self, frame, detail_level, objects):
@@ -356,14 +435,16 @@ class WorldScribeCaptioning:
         detected_objects = ", ".join([obj[0] for obj in objects[:5]]) if objects else "various objects"
         
         prompt = f"""You are a helpful visual describer for people who are blind or have low vision. 
-You will not mention this is an image; just describe it, and don't mention camera blur or motion.
-The scene contains: {detected_objects}.
-Please ensure you provide adjectives about {visual_attributes} to enrich the descriptions.
-You should describe each object with ONLY ONE sentence at maximum.
-Don't use 'it' to refer to an object. Use the object name instead.
-Most importantly, each sentence should be {length_constraints[detail_level]}.
-Provide each object description as a separate sentence."""
-        
+            You will not mention this is an image; just describe it, and don't mention camera blur or motion.
+            The scene contains: {detected_objects}.
+            Please ensure you provide adjectives about {visual_attributes} to enrich the descriptions.
+            Describe all in 1 short sentences only, focusing only the objects closet and their attributes (like focus on the chair, door ignore lighting, etc).
+            Make sure the caption is straightforward and easy to understand for someone who cannot see the image such as 'there are red apples on a wooden table'.
+            """
+        #You should describe each object with ONLY ONE sentence at maximum.
+        #    Don't use 'it' to refer to an object. Use the object name instead.
+        #    Most importantly, each sentence should be {length_constraints[detail_level]}.
+        #    Provide each object description as a separate sentence.
         try:
             headers = {
                 "Content-Type": "application/json",
@@ -539,266 +620,200 @@ Provide each object description as a separate sentence."""
         return True
     
     def process_frame(self, frame, frame_idx):
-        """
-        Main processing pipeline for each frame
-        """
         start_time = time.time()
         
-        # Step 1: YOLO World object detection (real-time ~0.1s)
+        # ALWAYS RUN YOLO
         yolo_start = time.time()
         objects = self.detect_objects_yolo(frame)
         yolo_time = time.time() - yolo_start
-        
         yolo_desc = self.generate_yolo_description(objects)
-        
-        # Step 2: Check if this is a keyframe
+
+        # Add YOLO desc immediately
+        with self.display_lock:
+            self.display_descriptions.append({
+                'type': 'YOLO',
+                'text': yolo_desc,
+                'time': yolo_time
+            })
+        print(f"[YOLO - {yolo_time:.2f}s] {yolo_desc}")
+
+        # CHECK KEYFRAME
         is_key, detail_level = self.is_keyframe(frame, objects, frame_idx)
-        
-        if is_key:
-            print(f"\n{'='*70}")
-            print(f"KEYFRAME DETECTED (Frame {frame_idx}) - Detail Level: {detail_level.upper()}")
-            print(f"{'='*70}")
-            
-            # Add YOLO description immediately
-            with self.display_lock:
-                self.display_descriptions.append({
-                    'type': 'YOLO',
-                    'text': yolo_desc,
-                    'time': yolo_time
-                })
-            print(f"\n[YOLO - {yolo_time:.2f}s] {yolo_desc}")
-            
-            # Step 3: Generate Moondream description (spatial relationships ~3s)
-            moondream_start = time.time()
-            moondream_desc = self.generate_moondream_description(frame, objects)
-            moondream_time = time.time() - moondream_start
-            
-            with self.display_lock:
-                self.display_descriptions.append({
-                    'type': 'Moondream',
-                    'text': moondream_desc,
-                    'time': moondream_time
-                })
-            print(f"[Moondream - {moondream_time:.2f}s] {moondream_desc}")
-            
-            # Step 4: Generate depth map for prioritization
+
+        if not is_key:
+            # NO KEYFRAME → SKIP MOONDREAM + GPT
+            return False, {'yolo': yolo_desc}
+
+        # === KEYFRAME: RUN MOONDREAM ===
+        print(f"\n{'='*70}")
+        print(f"KEYFRAME (Frame {frame_idx}) - Level: {detail_level.upper()}")
+        print(f"{'='*70}")
+
+        moondream_start = time.time()
+        moondream_desc = self.generate_moondream_description(frame, objects)
+        moondream_time = time.time() - moondream_start
+
+        with self.display_lock:
+            self.display_descriptions.append({
+                'type': 'Moondream',
+                'text': moondream_desc,
+                'time': moondream_time
+            })
+        print(f"[Moondream - {moondream_time:.2f}s] {moondream_desc}")
+
+        # === ONLY RUN GPT IF detail_level == 'verbose' or 'concise' ===
+        if detail_level in ["verbose", "concise"]:
             depth_start = time.time()
             depth_map = self.estimate_depth(frame)
             depth_time = time.time() - depth_start
-            print(f"[Depth Estimation - {depth_time:.2f}s] Complete")
-            
-            # Step 5: GPT-4V detailed description (~9s)
+            print(f"[Depth - {depth_time:.2f}s] Complete")
+
             gpt4v_start = time.time()
-            print(f"[GPT-4V] Generating {detail_level} descriptions...")
+            print(f"[GPT-4V] Generating {detail_level} description...")
             gpt4v_sentences = self.generate_gpt4v_description(frame, detail_level, objects)
             gpt4v_time = time.time() - gpt4v_start
-            
-            # Step 6: Prioritize GPT-4V descriptions
+
             prioritize_start = time.time()
             prioritized_sentences = self.prioritize_descriptions(gpt4v_sentences, frame, depth_map)
             prioritize_time = time.time() - prioritize_start
-            
-            print(f"\n[GPT-4V - {gpt4v_time:.2f}s] Generated {len(gpt4v_sentences)} descriptions")
-            print(f"[Prioritization - {prioritize_time:.2f}s] Sorted by relevance and proximity")
-            print("\nPrioritized Descriptions:")
-            
+
+            print(f"[GPT-4V - {gpt4v_time:.2f}s] {len(gpt4v_sentences)} sentences")
+            print(f"[Prioritize - {prioritize_time:.2f}s]")
+
             for idx, desc in enumerate(prioritized_sentences, 1):
                 if self.should_present_description(desc, frame):
                     with self.display_lock:
                         self.display_descriptions.append({
-                            'type': f'GPT-4V-{idx}',
+                            'type': f'GPT-4V',
                             'text': desc,
                             'time': gpt4v_time
                         })
                     print(f"  {idx}. {desc}")
                     self.last_spoken_description = desc
-                    break  # ✅ Only take the first valid description
-            
-            # Store in buffer
-            self.description_buffer.append({
-                'frame_idx': frame_idx,
-                'yolo': yolo_desc,
-                'moondream': moondream_desc,
-                'gpt4v': prioritized_sentences,
-                'detail_level': detail_level,
-                'timestamp': time.time()
-            })
-            
-            # Update state
-            self.prev_keyframe = frame.copy()
-            self.prev_keyframe_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            self.last_keyframe_time = time.time()
-            
-            total_time = time.time() - start_time
-            print(f"\nTotal Processing Time: {total_time:.2f}s")
-            print(f"{'='*70}\n")
-            
-            return True, {
+                    break
+
+            result = {
                 'yolo': yolo_desc,
                 'moondream': moondream_desc,
                 'gpt4v': prioritized_sentences
             }
-        
-        return False, None
+        else:
+            # normal keyframe → NO GPT
+            result = {
+                'yolo': yolo_desc,
+                'moondream': moondream_desc,
+                'gpt4v': None
+            }
+
+        # Store + update state
+        self.description_buffer.append({
+            'frame_idx': frame_idx,
+            'yolo': yolo_desc,
+            'moondream': moondream_desc,
+            'gpt4v': result['gpt4v'],
+            'detail_level': detail_level,
+            'timestamp': time.time()
+        })
+
+        self.prev_keyframe = frame.copy()
+        self.prev_keyframe_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        self.last_keyframe_time = time.time()
+
+        total_time = time.time() - start_time
+        print(f"Total: {total_time:.2f}s\n{'='*70}\n")
+
+        return True, result
     
     def draw_descriptions_on_frame(self, frame):
         display_frame = frame.copy()
         h, w = display_frame.shape[:2]
         
-        # Create a semi-transparent overlay panel on the right side
+        # Create a semi-transparent right-side panel
         panel_width = 400
         overlay = display_frame.copy()
         cv2.rectangle(overlay, (w - panel_width, 0), (w, h), (0, 0, 0), -1)
         cv2.addWeighted(overlay, 0.7, display_frame, 0.3, 0, display_frame)
-        
+
+        # Define fixed categories and colors
+        fixed_types = ["YOLO", "Moondream", "GPT-4V"]
+        colors = {
+            "YOLO": ((100, 255, 100), (0, 200, 0)),        # text, label
+            "Moondream": ((100, 200, 255), (0, 150, 255)),
+            "GPT-4V": ((150, 150, 255), (100, 100, 255)),
+        }
+
         with self.display_lock:
-            # Show last 5 descriptions
-            y_offset = 40
+            # Build a dict of latest descriptions from existing list
+            latest_by_type = {t: None for t in fixed_types}
+            for desc_info in reversed(self.display_descriptions):
+                desc_type = desc_info.get("type", "")
+                if desc_type in latest_by_type and latest_by_type[desc_type] is None:
+                    latest_by_type[desc_type] = desc_info["text"]
+                # Stop early if we already have all 3
+                if all(latest_by_type.values()):
+                    break
+
+            y_offset = 50
             line_height = 25
             padding = 10
-            
-            for i, desc_info in enumerate(self.display_descriptions[-5:]):
-                desc_type = desc_info['type']
-                desc_text = desc_info['text']
-                desc_time = desc_info['time']
-                
-                # Color coding with better visibility
-                if 'YOLO' in desc_type:
-                    color = (100, 255, 100)  # Bright green
-                    type_color = (0, 200, 0)
-                elif 'Moondream' in desc_type:
-                    color = (100, 200, 255)  # Light blue
-                    type_color = (0, 150, 255)
-                else:
-                    color = (150, 150, 255)  # Light purple for GPT-4V
-                    type_color = (100, 100, 255)
-                
-                # Draw type label with background
-                type_label = f"[{desc_type}]"
-                (tw, th), _ = cv2.getTextSize(type_label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-                cv2.rectangle(display_frame, 
-                            (w - panel_width + padding, y_offset - th - 5),
-                            (w - panel_width + padding + tw + 10, y_offset + 5),
-                            type_color, -1)
-                cv2.putText(display_frame, type_label, 
-                        (w - panel_width + padding + 5, y_offset),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
-                
-                y_offset += th + 15
-                
-                # Word wrap the description text
+
+            for source in fixed_types:
+                text_color, label_color = colors[source]
+                label = f"[{source}]"
+                desc_text = latest_by_type[source] or "Waiting..."
+
+                # Draw label background
+                (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 1)
+                cv2.rectangle(
+                    display_frame,
+                    (w - panel_width + padding, y_offset - th - 5),
+                    (w - panel_width + padding + tw + 10, y_offset + 5),
+                    label_color, -1
+                )
+                cv2.putText(
+                    display_frame,
+                    label,
+                    (w - panel_width + padding + 5, y_offset),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1, cv2.LINE_AA
+                )
+
+                y_offset += th + 10
+
+                # Word-wrap text
                 max_chars_per_line = 45
                 words = desc_text.split()
                 lines = []
                 current_line = ""
-                
+
                 for word in words:
                     test_line = current_line + " " + word if current_line else word
                     if len(test_line) <= max_chars_per_line:
                         current_line = test_line
                     else:
-                        if current_line:
-                            lines.append(current_line)
+                        lines.append(current_line)
                         current_line = word
-                
                 if current_line:
                     lines.append(current_line)
-                
-                # Limit to 3 lines max
-                lines = lines[:3]
-                if len(desc_text) > max_chars_per_line * 3:
+                lines = lines[:8]
+                if len(desc_text) > max_chars_per_line * 8:
                     lines[-1] = lines[-1][:max_chars_per_line-3] + "..."
-                
-                # Draw each line
-                for line in lines:
-                    cv2.putText(display_frame, line,
-                            (w - panel_width + padding + 10, y_offset),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 1, cv2.LINE_AA)
-                    y_offset += line_height
-                
-                y_offset += 10  # Extra spacing between descriptions
-                
-                # Stop if we're running out of space
-                if y_offset > h - 50:
-                    break
-        
-        return display_frame
-    
-    def run_camera(self):
-        """
-        Main loop - open camera and start captioning
-        """
-        print("\n" + "="*70)
-        print("Starting WorldScribe Live Captioning")
-        print("="*70)
-        print("Press 'q' to quit")
-        print("Press 'c' to clear description display")
-        print("="*70 + "\n")
-        
-        cap = cv2.VideoCapture(0)
-        
-        if not cap.isOpened():
-            print("Error: Could not open camera")
-            return
-        
-        # Set camera properties
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-        
-        frame_idx = 0
-        
-        try:
-            while True:
-                ret, frame = cap.read()
-                if not ret:
-                    print("Error: Could not read frame")
-                    break
-                
-                # Process frame
-                is_keyframe, descriptions = self.process_frame(frame, frame_idx)
-                
-                # Draw descriptions on frame
-                display_frame = self.draw_descriptions_on_frame(frame)
-                
-                # Add frame info
-                info_text = f"Frame: {frame_idx} | Keyframes: {len(self.description_buffer)}"
-                cv2.putText(display_frame, info_text, (10, display_frame.shape[0] - 10),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
-                
-                if is_keyframe:
-                    cv2.putText(display_frame, "KEYFRAME!", (display_frame.shape[1] - 150, 30),
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2, cv2.LINE_AA)
-                
-                cv2.imshow('WorldScribe Live Captioning', display_frame)
-                
-                # Handle keyboard input
-                key = cv2.waitKey(1) & 0xFF
-                if key == ord('q'):
-                    break
-                elif key == ord('c'):
-                    with self.display_lock:
-                        self.display_descriptions.clear()
-                    print("Display cleared")
-                
-                frame_idx += 1
-                
-        finally:
-            cap.release()
-            cv2.destroyAllWindows()
-            print("\n\nCamera capture stopped.")
-            print(f"Total keyframes detected: {len(self.description_buffer)}")
-            
-            # Print summary
-            if self.description_buffer:
-                print("\nSession Summary:")
-                for i, desc in enumerate(self.description_buffer[-5:], 1):
-                    print(f"\nKeyframe {desc['frame_idx']}:")
-                    print(f"  Detail Level: {desc['detail_level']}")
-                    print(f"  YOLO: {desc['yolo']}")
-                    print(f"  Moondream: {desc['moondream']}")
-                    if desc['gpt4v']:
-                        print(f"  GPT-4V: {desc['gpt4v'][0]}")
 
+                for line in lines:
+                    cv2.putText(
+                        display_frame,
+                        line,
+                        (w - panel_width + padding + 10, y_offset),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.45,
+                        text_color,
+                        1,
+                        cv2.LINE_AA
+                    )
+                    y_offset += line_height
+
+                y_offset += 20  # Space between sections
+
+        return display_frame
 
     def run_camera_2(self):
         print("\n" + "="*70)
@@ -834,23 +849,34 @@ Provide each object description as a separate sentence."""
 
                 cv2.imshow('WorldScribe Live Captioning', display_frame)
 
-                # Only start processing next frame if thread not busy
-                if processing_thread is None or not processing_thread.is_alive():
-                    processing_thread = threading.Thread(
-                        target=self.process_frame, args=(frame.copy(), frame_idx)
-                    )
-                    processing_thread.daemon = True
-                    processing_thread.start()
+                self._enqueue_latest(frame, frame_idx)
+
+                # 3. If a new description is ready, draw it
+                if self.result_ready.is_set():
+                    # (optional) flash a tiny “new description” indicator
+                    pass
 
                 key = cv2.waitKey(1) & 0xFF
-                if key == ord('q'):
-                    break
-                elif key == ord('c'):
-                    with self.display_lock:
-                        self.display_descriptions.clear()
-                    print("Display cleared")
-
+                if key == ord('q'): break
                 frame_idx += 1
+
+                # # Only start processing next frame if thread not busy
+                # if processing_thread is None or not processing_thread.is_alive():
+                #     processing_thread = threading.Thread(
+                #         target=self.process_frame, args=(frame.copy(), frame_idx)
+                #     )
+                #     processing_thread.daemon = True
+                #     processing_thread.start()
+
+                # key = cv2.waitKey(1) & 0xFF
+                # if key == ord('q'):
+                #     break
+                # elif key == ord('c'):
+                #     with self.display_lock:
+                #         self.display_descriptions.clear()
+                #     print("Display cleared")
+
+                # frame_idx += 1
 
         finally:
             cap.release()
