@@ -1,0 +1,5 @@
+{
+  "name": "MemoryMap Home",
+  "description": "An AI-powered home mapping and object tracking assistant for memory support.",
+  "requestFramePermissions": ["camera", "microphone"]
+}

@@ -1,0 +1,240 @@
+# api/app.py
+import os
+import io
+import base64
+from collections import defaultdict
+from typing import Any, Dict, List, Optional
+
+import numpy as np
+from dotenv import load_dotenv
+from fastapi import FastAPI, File, Form, Query, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, Response
+from openai import OpenAI
+from PIL import Image
+from pydantic import BaseModel
+
+# Retrieval layer
+from query.search import search as kb_search
+# Vision ingestion
+from vision.context_builder import describe_and_save
+
+# -------------------------------------------------------------------       
+# Environment & OpenAI setup
+# -------------------------------------------------------------------
+load_dotenv()
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+TTS_VOICE = os.getenv("TTS_VOICE", "alloy")
+TTS_MODEL = os.getenv("TTS_MODEL", "gpt-4o-mini-tts")
+
+client = OpenAI(api_key=OPENAI_API_KEY)
+
+# -------------------------------------------------------------------
+# FastAPI app & CORS
+# -------------------------------------------------------------------
+app = FastAPI(title="ALISS API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # adjust for production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# -------------------------------------------------------------------
+# Session state (multi-turn)
+# -------------------------------------------------------------------
+SessionState = Dict[str, Any]
+
+SESSIONS: Dict[str, SessionState] = defaultdict(
+    lambda: {
+        "turn": 0,
+        "last_question": None,
+        "last_evidence": [],
+    }
+)
+
+# -------------------------------------------------------------------
+# Helpers
+# -------------------------------------------------------------------
+def uploadfile_to_bgr_numpy(file: UploadFile) -> np.ndarray:
+    data = file.file.read()
+    img = Image.open(io.BytesIO(data)).convert("RGB")
+    arr = np.array(img)
+    return arr[..., ::-1].copy()  # RGB -> BGR
+
+
+def rows_to_evidence(rows) -> List[Dict[str, Any]]:
+    return [
+        {
+            "id": r[0],
+            "ts": str(r[1]),
+            "location": r[2],
+            "object": r[3],
+            "background": r[4],
+            "text": r[5],
+            "score": float(r[6]),
+        }
+        for r in rows
+    ]
+
+
+def tts_mp3_bytes(text: str, voice: str) -> bytes:
+    audio = client.audio.speech.with_streaming_response.create(
+        model=TTS_MODEL,
+        voice=voice,
+        input=text,
+        response_format="mp3",
+    )
+    return audio.read()
+
+
+# -------------------------------------------------------------------
+# Models
+# -------------------------------------------------------------------
+class ChatRequest(BaseModel):
+    session_id: str
+    message: str
+    k: int = 5
+    with_tts: bool = False
+    tts_voice: Optional[str] = None
+
+
+class SpeechRequest(BaseModel):
+    text: str
+    voice: Optional[str] = None
+
+
+# -------------------------------------------------------------------
+# Health
+# -------------------------------------------------------------------
+@app.get("/health")
+def health():
+    return {"status": "ok", "model": OPENAI_MODEL}
+
+
+# -------------------------------------------------------------------
+# Context Builder
+# -------------------------------------------------------------------
+@app.post("/memory")
+def create_memory(
+    obj_name: str = Form(...),
+    location: str = Form(...),
+    image: UploadFile = File(...),
+    model: str = Form("gpt-4o"),
+):
+    try:
+        bgr = uploadfile_to_bgr_numpy(image)
+        record = describe_and_save(
+            obj_name=obj_name,
+            image=bgr,
+            location=location,
+            model=model,
+        )
+        return {"saved": True, "record": record}
+    except Exception as e:
+        return JSONResponse({"error": f"Memory creation failed: {e}"}, status_code=500)
+
+# -------------------------------------------------------------------
+# Chat (+ optional TTS in same response)
+# -------------------------------------------------------------------
+@app.post("/chat")
+def chat(body: ChatRequest):
+    session_id = body.session_id
+    user_msg = body.message.strip()
+    k = body.k
+
+    if not user_msg:
+        return JSONResponse({"error": "Empty message"}, status_code=400)
+
+    state = SESSIONS[session_id]
+    state["turn"] += 1
+
+    # retrieval on first turn (or if evidence missing)
+    if state["turn"] == 1 or not state.get("last_evidence"):
+        rows = kb_search(user_msg, k=k)
+        evidence = rows_to_evidence(rows)
+
+        if not evidence:
+            state["last_question"] = user_msg
+            state["last_evidence"] = []
+            return {
+                "session_id": session_id,
+                "turn": state["turn"],
+                "answer": "I don’t have any records for that yet.",
+                "evidence": [],
+                "audio_base64": None,
+                "audio_mime": None,
+            }
+
+        state["last_question"] = user_msg
+        state["last_evidence"] = evidence
+
+    evidence = state["last_evidence"]
+
+    context = "\n".join(
+        f"[{e['ts']}] {e['location']} — {e['object']}. {e['background']} (score={e['score']:.3f})"
+        for e in evidence
+    )
+
+    prompt = (
+        "You are ALISS.\n"
+        "Use ONLY the evidence below.\n\n"
+        f"Question: {user_msg}\n\n"
+        f"EVIDENCE:\n{context}\n\n"
+        "Answer concisely (1–3 sentences)."
+    )
+
+    try:
+        resp = client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+            max_tokens=200,
+        )
+        answer_text = resp.choices[0].message.content.strip()
+    except Exception as e:
+        answer_text = f"Error generating answer: {e}"
+
+    audio_b64 = None
+    audio_mime = None
+    if body.with_tts and answer_text and not answer_text.startswith("Error generating answer"):
+        try:
+            voice = body.tts_voice or TTS_VOICE
+            mp3 = tts_mp3_bytes(answer_text, voice=voice)
+            audio_b64 = base64.b64encode(mp3).decode("utf-8")
+            audio_mime = "audio/mpeg"
+        except Exception:
+            audio_b64 = None
+            audio_mime = None
+
+    return {
+        "session_id": session_id,
+        "turn": state["turn"],
+        "answer": answer_text,
+        "evidence": evidence,
+        "audio_base64": audio_b64,
+        "audio_mime": audio_mime,
+    }
+
+
+# -------------------------------------------------------------------
+# Text to Speech (standalone)
+# -------------------------------------------------------------------
+@app.post("/speech")
+def speech(req: SpeechRequest):
+    text = req.text.strip()
+    if not text:
+        return JSONResponse({"error": "Empty text"}, status_code=400)
+
+    voice = req.voice or TTS_VOICE
+    data = tts_mp3_bytes(text, voice=voice)
+
+    return Response(
+        content=data,
+        media_type="audio/mpeg",
+        headers={"Content-Disposition": 'attachment; filename="speech.mp3"'},
+    )
