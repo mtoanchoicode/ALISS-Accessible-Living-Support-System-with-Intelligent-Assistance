@@ -7,18 +7,25 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, Form, Query, UploadFile
+from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from openai import OpenAI
 from PIL import Image
 from pydantic import BaseModel
 
+
 # Retrieval layer
 from query.search import search as kb_search
 # Vision ingestion
 from vision.context_builder import describe_and_save
 from vision.v2_graph_context_builder import load_graph, process_and_remember_observation
+# Auth API
+
+# Item API
+from services.item_service import get_item, update_item, delete_item, create_item
+# Video API
+
 
 # -------------------------------------------------------------------       
 # Environment & OpenAI setup
@@ -271,3 +278,19 @@ def speech(req: SpeechRequest):
         media_type="audio/mpeg",
         headers={"Content-Disposition": 'attachment; filename="speech.mp3"'},
     )
+
+@app.get("/items/{item_id}")
+async def read_item(item_id: str):
+    return get_item(item_id)
+
+@app.post("/items/{item_id}")
+async def create_item(item_data: dict):
+    return get_item(item_id)
+
+@app.delete("/items/{item_id}")
+async def read_item(item_id: str):
+    return get_item(item_id)
+
+@app.put("/items/{item_id}")
+async def update_item(item_id: str, update_data: dict):
+    return get_item(item_id)

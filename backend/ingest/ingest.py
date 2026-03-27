@@ -37,7 +37,6 @@ conn = psycopg2.connect(
 conn.autocommit = True
 register_vector(conn)
 
-
 # --------------------------------------------------
 # Embedding Helper
 # --------------------------------------------------
@@ -54,7 +53,6 @@ def embed_text(text: str) -> list[float]:
         )
 
     return vec.tolist()
-
 
 # --------------------------------------------------
 # Memory Insert
