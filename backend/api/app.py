@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from query.search import search as kb_search
 # Vision ingestion
 from vision.context_builder import describe_and_save
+from vision.v2_graph_context_builder import load_graph, process_and_remember_observation
 
 # -------------------------------------------------------------------       
 # Environment & OpenAI setup
@@ -30,6 +31,9 @@ TTS_VOICE = os.getenv("TTS_VOICE", "alloy")
 TTS_MODEL = os.getenv("TTS_MODEL", "gpt-4o-mini-tts")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
+
+GRAPH_SAVE_PATH = "./home_memory_graph.pkl"
+memory = load_graph(GRAPH_SAVE_PATH)
 
 # -------------------------------------------------------------------
 # FastAPI app & CORS
@@ -137,6 +141,35 @@ def create_memory(
         return {"saved": True, "record": record}
     except Exception as e:
         return JSONResponse({"error": f"Memory creation failed: {e}"}, status_code=500)
+    
+    
+@app.post("/memoryv2")
+def create_memory(
+    obj_name: str = Form(...),
+    location: str = Form(...),
+    image: UploadFile = File(...),
+    model: str = Form("gpt-4o"),
+):
+    try:
+        contents = image.file.read()
+        pil_image = Image.open(io.BytesIO(contents)).convert("RGB")
+
+        record = process_and_remember_observation(
+            graph=memory,
+            image=pil_image,
+            object_name=obj_name,
+            room_name=location,
+            save_path=GRAPH_SAVE_PATH
+        )
+
+        return {"saved": True, "record": record}
+
+    except Exception as e:
+        return JSONResponse(
+            {"error": f"Memory creation failed: {e}"},
+            status_code=500
+        )
+
 
 # -------------------------------------------------------------------
 # Chat (+ optional TTS in same response)

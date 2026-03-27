@@ -2,16 +2,18 @@
 
 import cv2
 from ultralytics import YOLO
-from datetime import datetime
-
-from vision.context_builder import describe_and_save
+from dotenv import load_dotenv
+from PIL import Image
+# from vision.context_builder import describe_and_save
+from vision.v2_graph_context_builder import process_and_remember_observation, load_graph
+load_dotenv()
 
 # ==========================================================
 # Config
 # ==========================================================
 MODEL_NAME   = "yolov8n.pt"      # YOLO model
 CAMERA_INDEX = 0
-CONF_THRESH  = 0.35
+CONF_THRESH  = 0.25
 PADDING_PX   = 40
 WINDOW_NAME  = "ALISS Vision – Press 1–9 to capture | Q to quit"
 
@@ -44,6 +46,11 @@ def crop_with_padding(frame, det, padding):
 # Main Camera Loop
 # ==========================================================
 def main():
+
+    GRAPH_SAVE_PATH = "./home_memory_graph.pkl"
+    memory = load_graph(GRAPH_SAVE_PATH)
+    memory.plot_graph()
+
     cap = cv2.VideoCapture(CAMERA_INDEX)
 
     if not cap.isOpened():
@@ -64,7 +71,7 @@ def main():
             frame,
             verbose=False,
             conf=CONF_THRESH,
-            classes=list(range(1, 80)),
+            classes=list(range(24, 80)),
         )[0]
 
         current_dets = []
@@ -75,6 +82,8 @@ def main():
             x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
             conf = float(box.conf[0])
             cls  = int(box.cls[0])
+            if cls < 24:
+                continue
             name = model.names[cls]
 
             label = f"{i+1}: {name}"
@@ -132,6 +141,8 @@ def main():
             if idx < len(current_dets):
                 det = current_dets[idx]
                 cropped = crop_with_padding(frame, det, PADDING_PX)
+                cropped_rgb = cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB)
+                cropped_pil = Image.fromarray(cropped_rgb)
 
                 obj_name = det["name"]
                 print(f"\n🧠 Capturing object: {obj_name}")
@@ -143,12 +154,19 @@ def main():
                     continue
 
                 try:
-                    record = describe_and_save(
-                        obj_name=obj_name,
-                        image=cropped,
-                        location=location,
+                    # record = describe_and_save(
+                    #     obj_name=obj_name,
+                    #     image=cropped,
+                    #     location=location,
+                    # )
+                    desc = process_and_remember_observation(
+                        graph=memory,
+                        image=cropped_pil,
+                        object_name=obj_name,
+                        room_name=location,
+                        save_path=GRAPH_SAVE_PATH
                     )
-                    print("✅ Saved to memory:", record, "\n")
+                    print("✅ Saved to memory:", desc, "\n")
 
                 except Exception as e:
                     print("❌ Error saving memory:", e)
