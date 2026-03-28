@@ -1,4 +1,4 @@
-import { BoundingBox } from '@/types/detection';
+import { BoundingBox } from "@/types/detection";
 
 export function isPointInBox(x: number, y: number, box: BoundingBox): boolean {
   return (
@@ -9,8 +9,11 @@ export function isPointInBox(x: number, y: number, box: BoundingBox): boolean {
   );
 }
 
-export function captureSnapshot(video: HTMLVideoElement, box: BoundingBox): string {
-  const canvas = document.createElement('canvas');
+export function captureSnapshot(
+  video: HTMLVideoElement,
+  box: BoundingBox,
+): string {
+  const canvas = document.createElement("canvas");
   // Add some padding
   const padding = 20;
   const sx = Math.max(0, box.x - padding);
@@ -20,10 +23,10 @@ export function captureSnapshot(video: HTMLVideoElement, box: BoundingBox): stri
 
   canvas.width = sw;
   canvas.height = sh;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext("2d");
   if (ctx) {
     ctx.drawImage(video, sx, sy, sw, sh, 0, 0, sw, sh);
-    return canvas.toDataURL('image/jpeg', 0.8);
+    return canvas.toDataURL("image/jpeg", 0.8);
   }
-  return '';
+  return "";
 }

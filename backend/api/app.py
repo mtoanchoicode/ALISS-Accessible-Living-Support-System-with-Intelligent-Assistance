@@ -22,9 +22,19 @@ from vision.context_builder import describe_and_save
 # Auth API
 
 # Item API
-from services.item_service import get_item, update_item, delete_item, create_item
+from services.item_service import (
+    get_item, update_item, delete_item, create_item, get_all_items as fetch_items
+)
 # Video API
+from services.video_service import (
+    get_video, update_video, delete_video, create_video, get_all_videos as fetch_videos
+)
 
+origins = [
+    "http://localhost:3000",      # Standard Next.js port
+    "http://127.0.0.1:3000",      # Alternative local IP
+    # "https://your-production-domain.com", # Uncomment and change this when you deploy!
+]
 
 # -------------------------------------------------------------------       
 # Environment & OpenAI setup
@@ -246,18 +256,57 @@ def speech(req: SpeechRequest):
         headers={"Content-Disposition": 'attachment; filename="speech.mp3"'},
     )
 
+# -------------------------------------------------------------------
+# Item API (CRUD)
+# -------------------------------------------------------------------
 @app.get("/items/{item_id}")
 async def read_item(item_id: str):
     return get_item(item_id)
 
-@app.post("/items/{item_id}")
-async def create_item(item_data: dict):
-    return get_item(item_id)
+@app.get("/items")
+async def read_all_items():
+    # Calling the renamed import 'fetch_items'
+    return fetch_items()
+
+@app.post("/items")
+async def create_new_item(item_data: dict):
+    return create_item(item_data)
 
 @app.delete("/items/{item_id}")
-async def read_item(item_id: str):
-    return get_item(item_id)
+async def remove_item(item_id: str):
+    return delete_item(item_id)
 
 @app.put("/items/{item_id}")
-async def update_item(item_id: str, update_data: dict):
-    return get_item(item_id)
+async def edit_item(item_id: str, update_data: dict):
+    return update_item(item_id, update_data)
+
+# -------------------------------------------------------------------
+# Video API (CRUD)
+# -------------------------------------------------------------------
+@app.get("/videos/{video_id}")
+async def read_video(video_id: str):
+    return get_video(video_id)
+
+@app.get("/videos")
+async def read_all_videos():
+    # Calling the renamed import 'fetch_videos'
+    return fetch_videos()
+
+@app.post("/videos")
+async def create_new_video(video_data: dict):
+    return create_video(video_data)
+
+@app.delete("/videos/{video_id}")
+async def remove_video(video_id: str):
+    return delete_video(video_id)
+
+@app.put("/videos/{video_id}")
+async def edit_video(video_id: str, update_data: dict):
+    return update_video(video_id, update_data)
+
+#--------------------------------------------------
+# Root
+#--------------------------------------------------
+@app.get("/")
+def read_root():
+    return {"status": "CORS is configured!"}
