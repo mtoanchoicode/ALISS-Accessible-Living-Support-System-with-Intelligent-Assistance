@@ -4,54 +4,57 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-SUPABASE_URL= os.getenv("SUPABASE_URL")
-SUPABASE_KEY= os.getenv("SUPABASE_KEY")
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY") # Usually the anon key for client-side, or service role for backend admin tasks
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise RuntimeError("Supabase environment variables are missing!")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# --------------------------------------------------
-# Register
-# --------------------------------------------------    
-def register(first_name: str, last_name: str, phone: str, email: str, password: str):
-    """
-    1. Creates user in auth.users (Supabase Auth)
-    2. The SQL Trigger (we discussed) will automatically create the row in public.profiles
-    3. We then update that profile with the extra metadata
-    """
+def login_user(email, password): # Rename to avoid confusion
     try:
-        # Step 1: Auth Signup
+        result = supabase.auth.sign_in_with_password({"email": email, "password": password})
+        return result
+    except Exception as e:
+        return {"status": "login_failed", "message": str(e)}
+
+def register_user(first_name, last_name, phone, email, password):
+    try:
+        # Step 1: Sign up the user in Supabase Auth
+        # This creates the record in the 'auth' schema
         auth_response = supabase.auth.sign_up({
             "email": email,
             "password": password,
         })
-        
+
+        if not auth_response.user:
+            return {"status": "error", "message": "Auth signup failed."}
+
         user_id = auth_response.user.id
-        
-        # Step 2: Update the public.profiles table (created via SQL Trigger)
-        # We use the 'public' schema here for your custom fields
-        supabase.table("profiles").update({
+
+        # Step 2: Insert additional profile info into your public.users table
+        # We use the user_id from the Auth step to link them
+        profile_data = {
+            "id": user_id, # Foreign key to auth.users
             "first_name": first_name,
             "last_name": last_name,
-            "phone_number": phone
-        }).eq("id", user_id).execute()
-        
-        return {"status": "success", "user_id": user_id}
-    
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+            "phone": phone,
+            "email": email
+        }
 
-# --------------------------------------------------
-# Login
-# --------------------------------------------------     
-def login(email: str, password: str): 
-    """
-    Authenticates the user and returns a session/token.
-    """
-    try:
-        response = supabase.auth.sign_in_with_password({
-            "email": email,
-            "password": password
-        })
-        return response
+        profile_response = supabase.table("users").insert(profile_data).execute()
+
+        return {
+            "status": "success",
+            "message": "User registered. Please check your email for confirmation.",
+            "user_id": user_id
+        }
+
     except Exception as e:
-        return {"status": "login_failed", "message": str(e)}
+        # Handle specific Supabase errors (like user already exists)
+        error_msg = str(e)
+        if "already registered" in error_msg.lower():
+            return {"status": "error", "message": "Email already in use."}
+        
+        return {"status": "error", "message": error_msg}
