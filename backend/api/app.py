@@ -20,7 +20,9 @@ from query.search import search as kb_search
 # Vision ingestion
 from vision.context_builder import describe_and_save
 from vision.v2_graph_context_builder import load_graph, process_and_remember_observation
+
 # Auth API
+from services.auth_service import login as auth_login, register as auth_register
 
 # Item API
 from services.item_service import (
@@ -123,10 +125,21 @@ class ChatRequest(BaseModel):
     with_tts: bool = False
     tts_voice: Optional[str] = None
 
-
 class SpeechRequest(BaseModel):
     text: str
     voice: Optional[str] = None
+
+# --- Pydantic Models for Auth ---
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+class RegisterRequest(BaseModel):
+    first_name: str
+    last_name: str
+    phone: str
+    email: str
+    password: str
 
 
 # -------------------------------------------------------------------
@@ -161,7 +174,7 @@ def create_memory(
     
     
 @app.post("/memoryv2")
-def create_memory(
+def create_memory_v2(
     obj_name: str = Form(...),
     location: str = Form(...),
     image: UploadFile = File(...),
@@ -288,6 +301,43 @@ def speech(req: SpeechRequest):
         media_type="audio/mpeg",
         headers={"Content-Disposition": 'attachment; filename="speech.mp3"'},
     )
+
+
+# -------------------------------------------------------------------
+# Auth API
+# -------------------------------------------------------------------
+@app.post("/auth/login")
+async def login_endpoint(req: LoginRequest): # Unique name
+    # Now calling the renamed import
+    result = auth_login(req.email, req.password) 
+    
+    if isinstance(result, dict) and result.get("status") == "login_failed":
+        return JSONResponse(status_code=401, content=result)
+    
+    # Handle the case where email confirmation is required (session is None)
+    if not hasattr(result, 'session') or not result.session:
+        return JSONResponse(
+            status_code=403, 
+            content={"error": "Please confirm your email address."}
+        )
+
+    return {
+        "access_token": result.session.access_token,
+        "user_id": result.user.id
+    }
+
+@app.post("/auth/register")
+async def register_endpoint(req: RegisterRequest): # Unique name
+    result = auth_register(
+        first_name=req.first_name,
+        last_name=req.last_name,
+        phone=req.phone,
+        email=req.email,
+        password=req.password
+    )
+    if isinstance(result, dict) and result.get("status") == "error":
+        return JSONResponse(status_code=400, content=result)
+    return result
 
 # -------------------------------------------------------------------
 # Item API (CRUD)
