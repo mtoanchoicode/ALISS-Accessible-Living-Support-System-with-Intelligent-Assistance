@@ -2,17 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, MessageSquare, Camera, Video, User } from "lucide-react";
+import { Home, MessageSquare, Camera, Database, Video } from "lucide-react";
 
 export default function BottomNav() {
   const pathname = usePathname();
 
   const navItems = [
     { name: "Home", href: "/", icon: Home },
+    { name: "Live", href: "/live", icon: Video },
+    { name: "Scanner", href: "/scanner", icon: Camera, isMain: true },
     { name: "Chat", href: "/chat", icon: MessageSquare },
-    { name: "Record", href: "/record", icon: Camera, isMain: true },
-    { name: "Videos", href: "/videos", icon: Video },
-    { name: "Profile", href: "/profile", icon: User },
+    { name: "Storage", href: "/storage", icon: Database },
   ];
 
   // Don't show nav on auth pages
@@ -32,7 +32,11 @@ export default function BottomNav() {
               <Link
                 key={item.name}
                 href={item.href}
-                className="relative -top-5 flex flex-col items-center justify-center w-14 h-14 bg-teal-600 rounded-full shadow-lg shadow-teal-600/30 text-white hover:bg-teal-700 transition-colors border-4 border-white"
+                className={`relative -top-5 flex flex-col items-center justify-center w-14 h-14 rounded-full shadow-lg transition-colors border-4 border-white ${
+                  isActive 
+                    ? "bg-teal-700 shadow-teal-700/40" 
+                    : "bg-teal-600 shadow-teal-600/30 hover:bg-teal-700"
+                } text-white`}
               >
                 <Icon className="w-6 h-6" strokeWidth={2.5} />
               </Link>

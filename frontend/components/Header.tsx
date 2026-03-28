@@ -1,9 +1,11 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { User } from "lucide-react";
 
 export default function Header() {
   const pathname = usePathname();
+  const router = useRouter();
 
   if (pathname === "/login" || pathname === "/register") {
     return null;
@@ -15,10 +17,12 @@ export default function Header() {
         return "Dashboard";
       case "/chat":
         return "Memory Assistant";
-      case "/record":
-        return "Scanner & Monitor";
-      case "/videos":
-        return "Recorded Contexts";
+      case "/scanner":
+        return "Object Scanner";
+      case "/live":
+        return "Home Monitor";
+      case "/storage":
+        return "Home Storage";
       case "/profile":
         return "Settings";
       default:
@@ -27,10 +31,18 @@ export default function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100 px-4 py-4 pt-safe">
+    <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100 px-4 py-4 flex items-center justify-between">
       <h1 className="text-xl font-semibold text-slate-800 tracking-tight">
         {getTitle()}
       </h1>
+      {pathname === "/" && (
+        <button
+          onClick={() => router.push("/profile")}
+          className="w-10 h-10 bg-teal-100 rounded-full flex items-center justify-center text-teal-700 hover:bg-teal-200 transition-colors"
+        >
+          <User className="w-6 h-6" />
+        </button>
+      )}
     </header>
   );
 }

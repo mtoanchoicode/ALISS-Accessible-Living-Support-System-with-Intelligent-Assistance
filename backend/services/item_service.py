@@ -20,6 +20,14 @@ def get_item(item_id: str):
     response = supabase.table("items").select("*").eq("id", item_id).single().execute()
     return response.data
 
+def get_all_items():
+    """Fetches all items from the Supabase table."""
+    response = supabase.table("items")\
+        .select("*, categories(name)")\
+        .order("created_at", desc=True)\
+        .execute()
+    return response.data
+
 # --------------------------------------------------
 # DELETE
 # -------------------------------------------------- 

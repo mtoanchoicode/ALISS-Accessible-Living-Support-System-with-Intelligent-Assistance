@@ -12,9 +12,6 @@ export default function HomePage() {
           <h2 className="text-2xl font-bold text-slate-900">Good morning,</h2>
           <p className="text-slate-500">Jane Doe</p>
         </div>
-        <div className="w-12 h-12 bg-teal-100 rounded-full flex items-center justify-center">
-          <span className="text-teal-700 font-bold text-lg">JD</span>
-        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -45,7 +42,7 @@ export default function HomePage() {
           <ArrowRight className="w-5 h-5 text-slate-400" />
         </Link>
         
-        <Link href="/record" className="flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:bg-slate-50 transition-colors">
+        <Link href="/scanner" className="flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:bg-slate-50 transition-colors">
           <div className="flex items-center space-x-4">
             <div className="w-12 h-12 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-600">
               <Map className="w-6 h-6" />
