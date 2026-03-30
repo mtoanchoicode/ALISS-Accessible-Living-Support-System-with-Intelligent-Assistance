@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse, Response
 from openai import OpenAI
 from PIL import Image
 from pydantic import BaseModel
+import time
 
 
 # Retrieval layer
@@ -178,6 +179,8 @@ def create_memory_v2(
     obj_name: str = Form(...),
     location: str = Form(...),
     image: UploadFile = File(...),
+    user_id = "user",
+    timestamp = time.time(),
     model: str = Form("gpt-4o"),
 ):
     try:
@@ -189,6 +192,8 @@ def create_memory_v2(
             image=pil_image,
             object_name=obj_name,
             room_name=location,
+            user_id=user_id,
+            timestamp=timestamp,
             save_path=GRAPH_SAVE_PATH
         )
 

@@ -3,6 +3,7 @@
 import cv2
 from ultralytics import YOLO
 from dotenv import load_dotenv
+import time
 from PIL import Image
 # from vision.context_builder import describe_and_save
 from vision.v2_graph_context_builder import process_and_remember_observation, load_graph
@@ -164,6 +165,8 @@ def main():
                         image=cropped_pil,
                         object_name=obj_name,
                         room_name=location,
+                        user_id="user",
+                        timestamp=time.time(),
                         save_path=GRAPH_SAVE_PATH
                     )
                     print("✅ Saved to memory:", desc, "\n")

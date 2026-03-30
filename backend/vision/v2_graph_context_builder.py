@@ -11,6 +11,8 @@ import matplotlib.pyplot as plt
 from PIL import Image
 from openai import OpenAI
 import pickle
+from datetime import datetime
+import plotly.graph_objects as go
 from dotenv import load_dotenv
 import os
 load_dotenv()
@@ -33,7 +35,7 @@ Return ONLY a valid JSON object (no markdown fences, no extra text) with the fol
     "condition": "<new | good | worn | damaged>"
   }},
   "location": {{
-    "surface": "<what the object is resting on, e.g. table, shelf, counter, floor>",
+    "surface": "<what the object is resting on. Chose from list: table, shelf, counter, floor>",
     "relative_position": "<brief spatial description, e.g. 'next to laptop', 'left side of table'>"
   }},
   "nearby_objects": ["<object1>", "<object2>"]
@@ -67,31 +69,37 @@ class HomeMemoryGraph:
         if nid not in self.graph:
             self.graph.add_node(nid, type="room", name=room_name.lower().strip())
         return nid
-
-    def _get_or_create_surface(self, surface_name: str, room_nid: str) -> str:
-        nid = self.node_id(surface_name, "surface")
+    
+    def _get_or_create_surface(self, surface_name: str, room_nid: str, user_id: str, timestamp: float) -> str:
+        nid = self.node_id(normalize_surface(surface_name), "surface")
         if nid not in self.graph:
-            self.graph.add_node(nid, type="surface", name=normalize_surface(surface_name))
+            self.graph.add_node(nid, 
+                                type="surface", 
+                                name=normalize_surface(surface_name),
+                                added_by=user_id,
+                                created_at=timestamp)
             self.graph.add_edge(nid, room_nid, relation="in")
         elif not self.graph.has_edge(nid, room_nid):
             self.graph.add_edge(nid, room_nid, relation="in")
         return nid
-
-    def _get_or_create_object(self, name: str, attributes: Dict[str, Any]) -> str:
+    
+    def _get_or_create_object(self, name: str, attributes: Dict[str, Any], user_id: str, timestamp: float) -> str:
         nid = self.node_id(name, "object")
-        ts = time.time()
 
         if nid not in self.graph:
             node_data = {
                 "type": "object",
                 "name": name.lower().strip(),
-                "last_seen": ts,
+                "last_seen": timestamp,
+                "seen_by": user_id, # Track who saw it
                 **attributes
             }
             self.graph.add_node(nid, **node_data)
         else:
+            # Update attributes and metadata for existing objects
             self.graph.nodes[nid].update(attributes)
-            self.graph.nodes[nid]["last_seen"] = ts
+            self.graph.nodes[nid]["last_seen"] = timestamp
+            self.graph.nodes[nid]["seen_by"] = user_id
 
         return nid
 
@@ -100,10 +108,7 @@ class HomeMemoryGraph:
         to_remove = [(u, v) for u, v, d in out_edges if d.get("relation") == "on"]
         self.graph.remove_edges_from(to_remove)
 
-    def add_observation(self, description: Dict[str, Any], room_name: str):
-        """
-        Integrate one structured object description into the graph memory.
-        """
+    def add_observation(self, description: Dict[str, Any], room_name: str, user_id: str, timestamp: float):
         obj_name = description.get("name", "").strip()
         if not obj_name:
             return
@@ -114,8 +119,8 @@ class HomeMemoryGraph:
         nearby = [n.strip() for n in description.get("nearby_objects", []) if n.strip()]
 
         room_nid    = self._get_or_create_room(room_name)
-        surface_nid = self._get_or_create_surface(surface, room_nid)
-        obj_nid     = self._get_or_create_object(obj_name, attrs)
+        surface_nid = self._get_or_create_surface(surface, room_nid, user_id, timestamp)
+        obj_nid     = self._get_or_create_object(obj_name, attrs, user_id, timestamp)
 
         # Object location
         self._clear_old_on_edges(obj_nid)
@@ -126,7 +131,7 @@ class HomeMemoryGraph:
             nb_nid = self.node_id(nb_name, "object")
             if nb_nid not in self.graph:
                 self.graph.add_node(nb_nid, type="object", name=nb_name.lower().strip(),
-                                    last_seen=time.time())
+                                    last_seen=timestamp, seen_by=user_id)
 
             if not self.graph.has_edge(obj_nid, nb_nid):
                 self.graph.add_edge(obj_nid, nb_nid, relation="next_to")
@@ -144,45 +149,118 @@ class HomeMemoryGraph:
         for u, v, data in self.graph.edges(data=True):
             print(f"{u} -> {v} [{data.get('relation')}]")
 
+
     def plot_graph(self):
-        plt.figure()
+        # 1. Calculate positions using networkx
         pos = nx.spring_layout(self.graph, seed=42)
+        
+        edge_x = []
+        edge_y = []
+        for edge in self.graph.edges():
+            x0, y0 = pos[edge[0]]
+            x1, y1 = pos[edge[1]]
+            edge_x.extend([x0, x1, None])
+            edge_y.extend([y0, y1, None])
 
+        # 2. Create Edge Trace
+        edge_trace = go.Scatter(
+            x=edge_x, y=edge_y,
+            line=dict(width=1, color='#888'),
+            hoverinfo='none',
+            mode='lines')
+
+        # 3. Create Node Trace
+        node_x = []
+        node_y = []
+        node_text = []
         node_colors = []
-        for _, data in self.graph.nodes(data=True):
+
+        for node, data in self.graph.nodes(data=True):
+            x, y = pos[node]
+            node_x.append(x)
+            node_y.append(y)
+            
+            # --- BUILD THE HOVER METADATA ---
+            # We format the dictionary nicely for the hover popup
+            metadata_str = f"<b>ID:</b> {node}<br>"
+            for key, value in data.items():
+                if key == 'last_seen' or key == 'created_at':
+                    # Convert timestamp to readable date
+                    value = datetime.fromtimestamp(value).strftime('%Y-%m-%d %H:%M:%S')
+                metadata_str += f"<b>{key}:</b> {value}<br>"
+            node_text.append(metadata_str)
+
+            # Assign colors based on type
             ntype = data.get("type")
+            if ntype == "room": node_colors.append("lightblue")
+            elif ntype == "surface": node_colors.append("lightgreen")
+            elif ntype == "object": node_colors.append("salmon")
+            else: node_colors.append("gray")
 
-            if ntype == "room":
-                node_colors.append("lightblue")
-            elif ntype == "surface":
-                node_colors.append("lightgreen")
-            elif ntype == "object":
-                node_colors.append("salmon")
-            else:
-                node_colors.append("gray")
+        node_trace = go.Scatter(
+            x=node_x, y=node_y,
+            mode='markers+text',
+            hoverinfo='text',
+            text=[data.get("name", "") for _, data in self.graph.nodes(data=True)], # Visible label
+            textposition="top center",
+            hovertext=node_text, # Hover popup content
+            marker=dict(
+                size=20,
+                color=node_colors,
+                line_width=2))
 
-        # Draw nodes with colors
-        nx.draw_networkx_nodes(self.graph, pos, node_color=node_colors)
+        # 4. Create the Figure
+        fig = go.Figure(data=[edge_trace, node_trace],
+                    layout=go.Layout(
+                        title='Home Memory Graph (Interactive)',
+                        showlegend=False,
+                        hovermode='closest',
+                        margin=dict(b=20, l=5, r=5, t=40),
+                        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False))
+                    )
 
-        # Draw edges
-        nx.draw_networkx_edges(self.graph, pos)
+        fig.show()
 
-        # Labels
-        labels = {
-            nid: data.get("name", nid)
-            for nid, data in self.graph.nodes(data=True)
-        }
-        nx.draw_networkx_labels(self.graph, pos, labels=labels)
+    # def plot_graph(self):
+    #     plt.figure()
+    #     pos = nx.spring_layout(self.graph, seed=42)
 
-        # Edge labels
-        edge_labels = {
-            (u, v): d.get("relation", "")
-            for u, v, d in self.graph.edges(data=True)
-        }
-        nx.draw_networkx_edge_labels(self.graph, pos, edge_labels=edge_labels)
+    #     node_colors = []
+    #     for _, data in self.graph.nodes(data=True):
+    #         ntype = data.get("type")
 
-        plt.title("Home Memory Graph")
-        plt.show()
+    #         if ntype == "room":
+    #             node_colors.append("lightblue")
+    #         elif ntype == "surface":
+    #             node_colors.append("lightgreen")
+    #         elif ntype == "object":
+    #             node_colors.append("salmon")
+    #         else:
+    #             node_colors.append("gray")
+
+    #     # Draw nodes with colors
+    #     nx.draw_networkx_nodes(self.graph, pos, node_color=node_colors)
+
+    #     # Draw edges
+    #     nx.draw_networkx_edges(self.graph, pos)
+
+    #     # Labels
+    #     labels = {
+    #         nid: data.get("name", nid)
+    #         for nid, data in self.graph.nodes(data=True)
+    #     }
+    #     nx.draw_networkx_labels(self.graph, pos, labels=labels)
+
+    #     # Edge labels
+    #     edge_labels = {
+    #         (u, v): d.get("relation", "")
+    #         for u, v, d in self.graph.edges(data=True)
+    #     }
+    #     nx.draw_networkx_edge_labels(self.graph, pos, edge_labels=edge_labels)
+
+    #     plt.title("Home Memory Graph")
+    #     plt.show()
         
 
 def image_to_base64(image_input: Union[str, Path, Image.Image, bytes]) -> str:
@@ -261,11 +339,16 @@ def process_and_remember_observation(
     image: Union[str, Path, Image.Image, bytes],
     object_name: str,
     room_name: str,
+    user_id: str,
+    timestamp: Optional[float] = None,
     save_path: Optional[Union[str, Path]] = None
 ) -> Dict[str, Any]:
     description = describe_object(image, object_name)
 
-    graph.add_observation(description, room_name)
+    if timestamp is None:
+        timestamp = time.time()
+
+    graph.add_observation(description, room_name, user_id, timestamp)
 
     if save_path:
         save_graph(graph, save_path)
