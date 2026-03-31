@@ -90,7 +90,6 @@ def uploadfile_to_bgr_numpy(file: UploadFile) -> np.ndarray:
     arr = np.array(img)
     return arr[..., ::-1].copy()  # RGB -> BGR
 
-
 def rows_to_evidence(rows) -> List[Dict[str, Any]]:
     return [
         {
@@ -105,7 +104,6 @@ def rows_to_evidence(rows) -> List[Dict[str, Any]]:
         for r in rows
     ]
 
-
 def tts_mp3_bytes(text: str, voice: str) -> bytes:
     audio = client.audio.speech.with_streaming_response.create(
         model=TTS_MODEL,
@@ -114,7 +112,6 @@ def tts_mp3_bytes(text: str, voice: str) -> bytes:
         response_format="mp3",
     )
     return audio.read()
-
 
 # -------------------------------------------------------------------
 # Models
@@ -142,14 +139,12 @@ class RegisterRequest(BaseModel):
     email: str
     password: str
 
-
 # -------------------------------------------------------------------
 # Health
 # -------------------------------------------------------------------
 @app.get("/health")
 def health():
     return {"status": "ok", "model": OPENAI_MODEL}
-
 
 # -------------------------------------------------------------------
 # Context Builder
@@ -288,7 +283,6 @@ def chat(body: ChatRequest):
         "audio_mime": audio_mime,
     }
 
-
 # -------------------------------------------------------------------
 # Text to Speech (standalone)
 # -------------------------------------------------------------------
@@ -306,7 +300,6 @@ def speech(req: SpeechRequest):
         media_type="audio/mpeg",
         headers={"Content-Disposition": 'attachment; filename="speech.mp3"'},
     )
-
 
 # -------------------------------------------------------------------
 # Auth API

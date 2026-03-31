@@ -7,7 +7,7 @@ export default function Header() {
   const pathname = usePathname();
   const router = useRouter();
 
-  if (pathname === "/login" || pathname === "/register") {
+  if (pathname === "/" || pathname === "/register") {
     return null;
   }
 
@@ -35,7 +35,7 @@ export default function Header() {
       <h1 className="text-xl font-semibold text-slate-800 tracking-tight">
         {getTitle()}
       </h1>
-      {pathname === "/" && (
+      {pathname === "/home" && (
         <button
           onClick={() => router.push("/profile")}
           className="w-10 h-10 bg-teal-100 rounded-full flex items-center justify-center text-teal-700 hover:bg-teal-200 transition-colors"

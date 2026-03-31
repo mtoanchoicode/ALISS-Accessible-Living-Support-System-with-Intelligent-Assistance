@@ -7,86 +7,16 @@ import { DetectedObject } from "../types/detection";
 // COCO-SSD labels (80 classes, 0-indexed)
 // ---------------------------------------------------------------------------
 const COCO_LABELS = [
-  "person",
-  "bicycle",
-  "car",
-  "motorcycle",
-  "airplane",
-  "bus",
-  "train",
-  "truck",
-  "boat",
-  "traffic light",
-  "fire hydrant",
-  "stop sign",
-  "parking meter",
-  "bench",
-  "bird",
-  "cat",
-  "dog",
-  "horse",
-  "sheep",
-  "cow",
-  "elephant",
-  "bear",
-  "zebra",
-  "giraffe",
-  "backpack",
-  "umbrella",
-  "handbag",
-  "tie",
-  "suitcase",
-  "frisbee",
-  "skis",
-  "snowboard",
-  "sports ball",
-  "kite",
-  "baseball bat",
-  "baseball glove",
-  "skateboard",
-  "surfboard",
-  "tennis racket",
-  "bottle",
-  "wine glass",
-  "cup",
-  "fork",
-  "knife",
-  "spoon",
-  "bowl",
-  "banana",
-  "apple",
-  "sandwich",
-  "orange",
-  "broccoli",
-  "carrot",
-  "hot dog",
-  "pizza",
-  "donut",
-  "cake",
-  "chair",
-  "couch",
-  "potted plant",
-  "bed",
-  "dining table",
-  "toilet",
-  "tv",
-  "laptop",
-  "mouse",
-  "remote",
-  "keyboard",
-  "cell phone",
-  "microwave",
-  "oven",
-  "toaster",
-  "sink",
-  "refrigerator",
-  "book",
-  "clock",
-  "vase",
-  "scissors",
-  "teddy bear",
-  "hair drier",
-  "toothbrush",
+  "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat",
+  "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat",
+  "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack",
+  "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball",
+  "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket",
+  "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple",
+  "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair",
+  "couch", "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse",
+  "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator",
+  "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush",
 ];
 
 // ---------------------------------------------------------------------------
@@ -118,7 +48,7 @@ let activeMode: ModelMode | null = null;
  * Falls back automatically to COCO-SSD (MobileNetV2) if YOLO is unavailable.
  */
 export async function loadModel(): Promise<ModelMode> {
-  if (activeMode) return activeMode; // already loaded
+  if (activeMode && (yoloModel || cocoModel)) return activeMode;
 
   await tf.ready();
 
@@ -143,12 +73,22 @@ export async function loadModel(): Promise<ModelMode> {
 // Public: detectObjects
 // ---------------------------------------------------------------------------
 
+let isReloadingHMR = false;
+
 export async function detectObjects(
   video: HTMLVideoElement,
 ): Promise<DetectedObject[]> {
-  if (!activeMode) {
-    console.warn("[detection] Model not loaded. Call loadModel() first.");
-    return [];
+  // Check if model memory was cleared by Next.js Fast Refresh
+  if (!activeMode || (!yoloModel && !cocoModel)) {
+    if (!isReloadingHMR) {
+      console.warn("[detection] Model memory lost due to Hot Reload. Reloading automatically in background...");
+      isReloadingHMR = true;
+      
+      loadModel()
+        .then(() => { isReloadingHMR = false; })
+        .catch(() => { isReloadingHMR = false; });
+    }
+    return []; // Return empty array to prevent app crash while reloading
   }
 
   return activeMode === "yolo"
@@ -163,7 +103,7 @@ export async function detectObjects(
 export function disposeModels(): void {
   yoloModel?.dispose();
   yoloModel = null;
-  cocoModel = null; // COCO-SSD doesn't expose dispose, but clear the ref
+  cocoModel = null;
   activeMode = null;
 }
 
@@ -192,15 +132,19 @@ async function detectWithYolo(
   // 2. Inference
   const rawOutput = yoloModel.predict(img) as tf.Tensor;
 
-  // 3. Reshape: [1, 84, 8400] → [8400, 84]
+  // 3. Reshape: e.g., [1, 16, 8400] → [8400, 16]
   const res = tf.tidy(
     () =>
       (rawOutput as tf.Tensor).transpose([0, 2, 1]).squeeze() as tf.Tensor2D,
   );
 
-  // 4. Split boxes [8400,4] and class probabilities [8400,80]
+  // DYNAMIC FIX: Calculate available classes based on tensor shape
+  const numColumns = res.shape[1]; 
+  const numClasses = numColumns - 4; 
+
+  // 4. Split boxes [8400, 4] and class probabilities [8400, numClasses]
   const boxes = res.slice([0, 0], [-1, 4]) as tf.Tensor2D;
-  const classProbs = res.slice([0, 4], [-1, 80]);
+  const classProbs = res.slice([0, 4], [-1, numClasses]);
   const scores = classProbs.max(1) as tf.Tensor1D;
   const classes = classProbs.argMax(1);
 
@@ -233,7 +177,7 @@ async function detectWithYolo(
     indicesTensor,
   ]);
 
-  // 8. Map → DetectedObject[], applying optional class filter
+  // 8. Map → DetectedObject[]
   const results: DetectedObject[] = [];
 
   for (const idx of indices) {
@@ -248,9 +192,14 @@ async function detectWithYolo(
 
     const [xCenter, yCenter, width, height] = bData[idx];
 
+    // Support for custom model classes fallback
+    const className = numClasses === 80 
+      ? COCO_LABELS[classId] 
+      : `Custom Class ${classId}`;
+
     results.push({
       id: `det-${Date.now()}-${idx}`,
-      class: COCO_LABELS[classId] ?? `class_${classId}`,
+      class: className,
       score: sData[idx],
       bbox: {
         x: (xCenter - width / 2) * widthRatio,
