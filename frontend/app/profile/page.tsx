@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "motion/react";
 import {
   User,
@@ -8,45 +9,46 @@ import {
   Shield,
   LogOut,
   ChevronRight,
+  Loader2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { authService } from "@/services/authService";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function ProfilePage() {
   const router = useRouter();
+  // 1. Protect this page! Kick out anyone who isn't logged in.
+  const { isChecking } = useAuth(); 
+  
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  const handleLogout = () => {
-    router.push("/login");
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await authService.logoutApi(); 
+
+      authService.logout(); 
+
+      router.push("/"); 
+    } catch (error) {
+      console.error("Failed to log out:", error);
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
   const menuItems = [
-    {
-      icon: User,
-      label: "Personal Information",
-      color: "text-blue-500",
-      bg: "bg-blue-50",
-    },
-    {
-      icon: Settings,
-      label: "App Settings",
-      color: "text-slate-500",
-      bg: "bg-slate-50",
-    },
-    {
-      icon: Bell,
-      label: "Notifications",
-      color: "text-amber-500",
-      bg: "bg-amber-50",
-    },
-    {
-      icon: Shield,
-      label: "Privacy & Security",
-      color: "text-emerald-500",
-      bg: "bg-emerald-50",
-    },
+    { icon: User, label: "Personal Information", color: "text-blue-500", bg: "bg-blue-50" },
+    { icon: Settings, label: "App Settings", color: "text-slate-500", bg: "bg-slate-50" },
+    { icon: Bell, label: "Notifications", color: "text-amber-500", bg: "bg-amber-50" },
+    { icon: Shield, label: "Privacy & Security", color: "text-emerald-500", bg: "bg-emerald-50" },
   ];
 
+  // Don't flash the UI while checking authentication
+  if (isChecking) return null;
+
   return (
-    <div className="p-4 space-y-6">
+    <div className="p-4 space-y-6 pb-24">
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -71,15 +73,11 @@ export default function ProfilePage() {
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: index * 0.1 }}
               className={`w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors ${
-                index !== menuItems.length - 1
-                  ? "border-b border-slate-100"
-                  : ""
+                index !== menuItems.length - 1 ? "border-b border-slate-100" : ""
               }`}
             >
               <div className="flex items-center space-x-4">
-                <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center ${item.bg} ${item.color}`}
-                >
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${item.bg} ${item.color}`}>
                   <Icon className="w-5 h-5" />
                 </div>
                 <span className="font-medium text-slate-700">{item.label}</span>
@@ -95,10 +93,17 @@ export default function ProfilePage() {
         animate={{ opacity: 1 }}
         transition={{ delay: 0.4 }}
         onClick={handleLogout}
-        className="w-full flex items-center justify-center space-x-2 p-4 bg-red-50 text-red-600 rounded-2xl font-medium hover:bg-red-100 transition-colors"
+        disabled={isLoggingOut}
+        className="w-full flex items-center justify-center space-x-2 p-4 bg-red-50 text-red-600 rounded-2xl font-medium hover:bg-red-100 transition-colors disabled:opacity-70"
       >
-        <LogOut className="w-5 h-5" />
-        <span>Log Out</span>
+        {isLoggingOut ? (
+          <Loader2 className="w-5 h-5 animate-spin" />
+        ) : (
+          <>
+            <LogOut className="w-5 h-5" />
+            <span>Log Out</span>
+          </>
+        )}
       </motion.button>
     </div>
   );

@@ -8,15 +8,15 @@ export default function BottomNav() {
   const pathname = usePathname();
 
   const navItems = [
-    { name: "Home", href: "/", icon: Home },
+    { name: "Home", href: "/home", icon: Home },
     { name: "Live", href: "/live", icon: Video },
-    { name: "Scanner", href: "/scanner", icon: Camera, isMain: true },
+    { name: "Camera", href: "/camera", icon: Camera, isMain: true },
     { name: "Chat", href: "/chat", icon: MessageSquare },
     { name: "Storage", href: "/storage", icon: Database },
   ];
 
   // Don't show nav on auth pages
-  if (pathname === "/login" || pathname === "/register") {
+  if (pathname === "/" || pathname === "/register") {
     return null;
   }
 

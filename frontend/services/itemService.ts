@@ -2,7 +2,6 @@ import { apiClient } from "./apiClient";
 import { StorageItem } from "../types";
 
 export const itemService = {
-  // Assuming you will make a GET /items route to fetch all
   getAllItems: (): Promise<StorageItem[]> => {
     return apiClient("/items");
   },

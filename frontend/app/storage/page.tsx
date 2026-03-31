@@ -1,59 +1,32 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { motion } from "motion/react";
 import {
   Database,
   Search,
   Video,
   Package,
-  Clock,
-  MapPin,
-  MoreVertical,
 } from "lucide-react";
-import { StorageItem, StorageVideo } from "@/types";
-import { itemService } from "@/services/itemService";
-import { videoService } from "@/services/videoService";
 import StorageSkeleton from "@/components/StorageSkeleton";
+import { useAuth } from "@/hooks/useAuth";
+import { useStorageData } from "@/hooks/useStorageData";
 
 export default function StoragePage() {
+  const { isChecking } = useAuth();
+  
+  const { items, videos, isLoading } = useStorageData(isChecking);
+
   const [activeTab, setActiveTab] = useState<"items" | "videos">("items");
   const [searchQuery, setSearchQuery] = useState("");
-  const [items, setItems] = useState<StorageItem[]>([]);
-  const [videos, setVideos] = useState<StorageVideo[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchAllData = async () => {
-      try {
-        setIsLoading(true);
-
-        const [backendItems, backendVideos] = await Promise.all([
-          itemService.getAllItems(),
-          videoService.getAllVideos(),
-        ]);
-
-        setItems((backendItems || []).map((i) => ({ ...i, type: "item" })));
-        setVideos((backendVideos || []).map((v) => ({ ...v, type: "video" })));
-      } catch (error) {
-        console.error("Failed to fetch data:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchAllData();
-  }, []);
 
   const currentSource = activeTab === "items" ? items : videos;
 
-  const filteredItems = currentSource.filter((item) => {
-    const matchesSearch = item.name
-      ?.toLowerCase()
-      .includes(searchQuery.toLowerCase());
-
-    return matchesSearch;
+  const filteredItems = currentSource.filter((item: any) => {
+    return item.name?.toLowerCase().includes(searchQuery.toLowerCase());
   });
+
+  if (isChecking) return null;
 
   return (
     <div className="p-4 space-y-6 pb-24">
@@ -91,7 +64,7 @@ export default function StoragePage() {
         {isLoading ? (
           <StorageSkeleton />
         ) : filteredItems.length > 0 ? (
-          filteredItems.map((item) => (
+          filteredItems.map((item: any) => (
             <motion.div
               key={item.id}
               initial={{ opacity: 0, y: 10 }}
@@ -99,7 +72,6 @@ export default function StoragePage() {
               className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex items-center space-x-4"
             >
               <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 bg-slate-50 flex items-center justify-center">
-                {/* Type-Safe Check */}
                 {item.type === "item" ? (
                   <img
                     src={item.image_uri}
@@ -111,15 +83,13 @@ export default function StoragePage() {
                     <Video className="w-6 h-6 text-blue-500" />
                   </div>
                 ) : (
-                  <Package className="..." />
+                  <Package className="w-6 h-6 text-slate-400" />
                 )}
               </div>
 
               <div className="flex-1">
                 <h4 className="font-bold">{item.name}</h4>
                 <div className="flex gap-2 text-[10px] text-slate-400 font-bold uppercase">
-                  {/* <span>{item.categories?.name || "Uncategorized"}</span>
-                  <span>•</span> */}
                   <span>{new Date(item.created_at).toLocaleDateString()}</span>
                 </div>
               </div>

@@ -13,8 +13,10 @@ import {
   Activity,
   ShieldCheck
 } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function LivePage() {
+  const { isChecking } = useAuth();
   const [isConnected, setIsConnected] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -28,6 +30,8 @@ export default function LivePage() {
   //   const response = await fetch('https://your-cctv-api.com/stream');
   //   ...
   // };
+
+  if (isChecking) return;   
 
   return (
     <div className="flex flex-col h-full bg-slate-900 relative">

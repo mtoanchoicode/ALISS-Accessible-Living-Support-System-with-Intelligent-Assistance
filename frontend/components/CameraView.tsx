@@ -32,19 +32,18 @@ export default function CameraView({ onObjectSelect, selectedObjectId, isActive 
     const startCamera = async () => {
       try {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          if (!window.isSecureContext) {
-            setError('Camera access requires a secure context (HTTPS). If you are testing locally, use localhost or set up HTTPS.');
-          } else {
-            setError('Camera API not supported in this browser.');
-          }
+          setError('Camera API not supported in this browser.');
           return;
         }
 
+        // Detect if mobile to swap requested resolution orientation
+        const isMobile = window.innerWidth < 768;
+        
         const constraints = {
           video: { 
             facingMode: 'environment',
-            width: { ideal: 1280, max: 1920 },
-            height: { ideal: 720, max: 1080 }
+            width: isMobile ? { ideal: 1080 } : { ideal: 1920 },
+            height: isMobile ? { ideal: 1920 } : { ideal: 1080 }
           },
           audio: false,
         };
@@ -52,7 +51,6 @@ export default function CameraView({ onObjectSelect, selectedObjectId, isActive 
         stream = await navigator.mediaDevices.getUserMedia(constraints);
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
-          // Some mobile browsers need a manual play call
           try {
             await videoRef.current.play();
           } catch (playErr) {
@@ -61,13 +59,7 @@ export default function CameraView({ onObjectSelect, selectedObjectId, isActive 
         }
       } catch (err) {
         console.error('Camera Error:', err);
-        if (err instanceof DOMException && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError')) {
-          setError('Camera permission denied. Please enable camera access in your browser settings.');
-        } else if (err instanceof DOMException && err.name === 'NotFoundError') {
-          setError('No camera found on this device.');
-        } else {
-          setError(`Camera error: ${err instanceof Error ? err.message : 'Unknown error'}`);
-        }
+        setError(`Camera error: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
     };
 
@@ -131,13 +123,10 @@ export default function CameraView({ onObjectSelect, selectedObjectId, isActive 
           <p className="font-medium tracking-tight">Loading AI Model...</p>
         </div>
       )}
+      
+      {/* Centered container that respects aspect ratio dynamically */}
       <div 
-        className="relative" 
-        style={{ 
-          aspectRatio: videoDimensions.width && videoDimensions.height ? `${videoDimensions.width}/${videoDimensions.height}` : '16/9',
-          maxHeight: '100%',
-          maxWidth: '100%'
-        }}
+        className="relative flex items-center justify-center w-full h-full" 
       >
         <video
           ref={videoRef}
@@ -145,20 +134,22 @@ export default function CameraView({ onObjectSelect, selectedObjectId, isActive 
           playsInline
           muted
           onLoadedMetadata={handleVideoLoad}
-          className="w-full h-full block object-contain"
+          className="w-full h-full object-contain"
         />
         {isModelLoaded && videoDimensions.width > 0 && (
-          <DetectionCanvas
-            objects={objects}
-            videoWidth={videoDimensions.width}
-            videoHeight={videoDimensions.height}
-            onObjectClick={(obj) => {
-              if (videoRef.current) {
-                onObjectSelect(obj, videoRef.current);
-              }
-            }}
-            selectedObjectId={selectedObjectId}
-          />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <DetectionCanvas
+              objects={objects}
+              videoWidth={videoDimensions.width}
+              videoHeight={videoDimensions.height}
+              onObjectClick={(obj) => {
+                if (videoRef.current) {
+                  onObjectSelect(obj, videoRef.current);
+                }
+              }}
+              selectedObjectId={selectedObjectId}
+            />
+          </div>
         )}
       </div>
     </div>
