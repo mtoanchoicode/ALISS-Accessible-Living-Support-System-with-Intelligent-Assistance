@@ -3,12 +3,9 @@
 import Link from "next/link";
 import { Eye, EyeOff, Lock, Mail, Loader2 } from "lucide-react";
 import { motion } from "motion/react";
-import { useAuth } from "@/hooks/useAuth";
 import { useLoginForm } from "@/hooks/useLoginForm";
 
 export default function Login() {
-  const { isChecking } = useAuth({ requireAuth: false });
-  
   const {
     email,
     setEmail,
@@ -23,8 +20,6 @@ export default function Login() {
     isLoading,
     errorMsg,
   } = useLoginForm();
-
-  if (isChecking) return null;
 
   return (
     <div className="flex-1 flex flex-col justify-center px-6 py-12 bg-white">

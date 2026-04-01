@@ -12,11 +12,9 @@ import {
   Activity,
   ShieldCheck
 } from "lucide-react";
-import { useAuth } from "@/hooks/useAuth";
 import { useLiveMonitor } from "@/hooks/useLiveMonitor";
 
 export default function LivePage() {
-  const { isChecking } = useAuth();
   const { isConnected, currentTime, handleRetryConnection } = useLiveMonitor();
 
   // TODO: Integrate CCTV API here
@@ -24,8 +22,6 @@ export default function LivePage() {
   //   const response = await fetch('https://your-cctv-api.com/stream');
   //   ...
   // };
-
-  if (isChecking) return;   
 
   return (
     <div className="flex flex-col h-full bg-slate-900 relative">

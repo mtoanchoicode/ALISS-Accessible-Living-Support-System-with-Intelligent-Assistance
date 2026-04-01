@@ -2,14 +2,10 @@
 
 import { Search, Map, Clock, Bell, ArrowRight, ShieldCheck } from "lucide-react";
 import Link from "next/link";
-import { useAuth } from "@/hooks/useAuth";
 import { useUserProfile } from "@/hooks/useUserProfile";
 
 export default function HomePage() {
-  const { isChecking } = useAuth();
   const { profile, isLoading } = useUserProfile();
-
-  if (isChecking) return null;
 
   return (
     <div className="p-4 space-y-6">

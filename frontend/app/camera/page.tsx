@@ -5,12 +5,9 @@ import { motion } from "motion/react";
 import { StopCircle, RefreshCw, Maximize2, Settings2 } from "lucide-react";
 import CameraView from "../../components/CameraView";
 import ItemModal from "@/components/ItemModal";
-import { useAuth } from "@/hooks/useAuth";
 import { useCameraControls } from "@/hooks/useCameraControls";
 
 export default function RecordPage() {
-  const { isChecking } = useAuth();
-  
   const {
     isRecording,
     recordingTime,
@@ -32,8 +29,6 @@ export default function RecordPage() {
     const s = (seconds % 60).toString().padStart(2, "0");
     return `${m}:${s}`;
   };
-
-  if (isChecking) return null;
 
   return (
     // Changed to h-[100dvh] for mobile browser safe areas

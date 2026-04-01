@@ -24,6 +24,8 @@ export const authService = {
     if (userId) {
       localStorage.setItem("aliss_user_id", userId);
     }
+    // Bind to Cookie strictly for Next.js Middleware tracking!
+    document.cookie = `aliss_token=${token}; path=/; max-age=86400`;
   },
   
   // Update 2: Check expiration before returning the token
@@ -47,6 +49,8 @@ export const authService = {
     localStorage.removeItem("aliss_token");
     localStorage.removeItem("aliss_token_expires");
     localStorage.removeItem("aliss_user_id");
+    // Purge middleware cookie tracker
+    document.cookie = "aliss_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
   },
 
   logoutApi: async () => {
