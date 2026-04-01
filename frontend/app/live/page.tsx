@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { 
   Video, 
@@ -14,16 +13,11 @@ import {
   ShieldCheck
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useLiveMonitor } from "@/hooks/useLiveMonitor";
 
 export default function LivePage() {
   const { isChecking } = useAuth();
-  const [isConnected, setIsConnected] = useState(true);
-  const [currentTime, setCurrentTime] = useState(new Date());
-
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
+  const { isConnected, currentTime, handleRetryConnection } = useLiveMonitor();
 
   // TODO: Integrate CCTV API here
   // const fetchCCTVStream = async () => {
@@ -52,7 +46,7 @@ export default function LivePage() {
             <WifiOff className="w-16 h-16 animate-pulse" />
             <p className="text-lg font-medium">Connection Lost</p>
             <button 
-              onClick={() => setIsConnected(true)}
+              onClick={handleRetryConnection}
               className="px-6 py-2 bg-white/10 rounded-full text-white hover:bg-white/20 transition-all"
             >
               Retry Connection

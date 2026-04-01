@@ -1,49 +1,33 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { Eye, EyeOff, Lock, Mail, Loader2 } from "lucide-react";
 import { motion } from "motion/react";
 import { useAuth } from "@/hooks/useAuth";
-import { useLogin } from "@/hooks/useLogin";
-import { validateEmail } from "@/utils/validation";
+import { useLoginForm } from "@/hooks/useLoginForm";
 
 export default function Login() {
   const { isChecking } = useAuth({ requireAuth: false });
-  const { executeLogin, isLoading, errorMsg } = useLogin();
   
-  const [showPassword, setShowPassword] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  
-  // Track touched fields for inline UI errors
-  const [touched, setTouched] = useState({
-    email: false,
-    password: false,
-  });
-
-  const isEmailValid = validateEmail(email);
-
-  const handleBlur = (field: "email" | "password") => {
-    setTouched((prev) => ({ ...prev, [field]: true }));
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    setTouched({ email: true, password: true });
-
-    if (!email || !isEmailValid || !password) {
-      return; 
-    }
-
-    executeLogin(email, password);
-  };
+  const {
+    email,
+    setEmail,
+    password,
+    setPassword,
+    showPassword,
+    toggleShowPassword,
+    touched,
+    handleBlur,
+    handleSubmit,
+    isEmailValid,
+    isLoading,
+    errorMsg,
+  } = useLoginForm();
 
   if (isChecking) return null;
 
   return (
-    <div className="min-h-screen flex flex-col justify-center px-6 py-12 bg-white">
+    <div className="flex-1 flex flex-col justify-center px-6 py-12 bg-white">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -115,7 +99,7 @@ export default function Login() {
               <button
                 type="button"
                 className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                onClick={() => setShowPassword(!showPassword)}
+                onClick={toggleShowPassword}
               >
                 {showPassword ? (
                   <EyeOff className="h-5 w-5 text-slate-400 hover:text-slate-600" />

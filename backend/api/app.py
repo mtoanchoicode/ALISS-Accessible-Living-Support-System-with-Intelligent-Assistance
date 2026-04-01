@@ -33,6 +33,8 @@ from services.item_service import (
 from services.video_service import (
     get_video, update_video, delete_video, create_video, get_all_videos as fetch_videos
 )
+# User API
+from services.user_service import get_profile as fetch_user_profile
 
 origins = [
     "http://localhost:3000",      # Standard Next.js port
@@ -384,6 +386,16 @@ async def remove_video(video_id: str):
 @app.put("/videos/{video_id}")
 async def edit_video(video_id: str, update_data: dict):
     return update_video(video_id, update_data)
+
+# -------------------------------------------------------------------
+# User API
+# -------------------------------------------------------------------
+@app.get("/users/{user_id}")
+async def read_user_profile(user_id: str):
+    profile = fetch_user_profile(user_id)
+    if profile:
+        return profile
+    return JSONResponse(status_code=404, content={"error": "User not found"})
 
 #--------------------------------------------------
 # Root

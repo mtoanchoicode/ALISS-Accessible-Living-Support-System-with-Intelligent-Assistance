@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { motion } from "motion/react";
 import {
   User,
@@ -11,31 +10,14 @@ import {
   ChevronRight,
   Loader2,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { authService } from "@/services/authService";
 import { useAuth } from "@/hooks/useAuth";
+import { useProfile } from "@/hooks/useProfile";
+import { useUserProfile } from "@/hooks/useUserProfile";
 
 export default function ProfilePage() {
-  const router = useRouter();
-  // 1. Protect this page! Kick out anyone who isn't logged in.
   const { isChecking } = useAuth(); 
-  
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
-
-  const handleLogout = async () => {
-    setIsLoggingOut(true);
-    try {
-      await authService.logoutApi(); 
-
-      authService.logout(); 
-
-      router.push("/"); 
-    } catch (error) {
-      console.error("Failed to log out:", error);
-    } finally {
-      setIsLoggingOut(false);
-    }
-  };
+  const { isLoggingOut, handleLogout } = useProfile();
+  const { profile, isLoading } = useUserProfile();
 
   const menuItems = [
     { icon: User, label: "Personal Information", color: "text-blue-500", bg: "bg-blue-50" },
@@ -58,8 +40,12 @@ export default function ProfilePage() {
           <User className="w-8 h-8" />
         </div>
         <div>
-          <h2 className="text-xl font-bold text-slate-900">Jane Doe</h2>
-          <p className="text-sm text-slate-500">jane.doe@example.com</p>
+          <h2 className="text-xl font-bold text-slate-900">
+            {isLoading ? "Loading..." : profile ? `${profile.first_name} ${profile.last_name}` : "User"}
+          </h2>
+          <p className="text-sm text-slate-500">
+            {isLoading ? "Loading..." : profile ? profile.email : ""}
+          </p>
         </div>
       </motion.div>
 

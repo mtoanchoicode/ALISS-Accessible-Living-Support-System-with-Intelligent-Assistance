@@ -1,7 +1,5 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { 
   Eye, 
@@ -15,92 +13,32 @@ import {
   Circle
 } from "lucide-react";
 import { motion } from "motion/react";
-import { authService } from "@/services/authService";
 import { useAuth } from "@/hooks/useAuth";
-import { 
-  validateEmail, 
-  validateVietnamesePhone, 
-  checkPasswordCriteria, 
-  formatPhoneForBackend 
-} from "@/utils/validation";
+import { useRegisterForm } from "@/hooks/useRegisterForm";
 
 export default function Register() {
-  const router = useRouter();
   const { isChecking } = useAuth({ requireAuth: false });
 
-  const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
-  const [successMsg, setSuccessMsg] = useState("");
-
-  const [formData, setFormData] = useState({
-    firstName: "",
-    lastName: "",
-    phone: "",
-    email: "",
-    password: "",
-  });
-
-  const [touched, setTouched] = useState({
-    firstName: false,
-    lastName: false,
-    phone: false,
-    email: false,
-    password: false,
-  });
-
-  // Validation trackers
-  const passwordCriteria = checkPasswordCriteria(formData.password);
-  const isPhoneValid = validateVietnamesePhone(formData.phone);
-  const isEmailValid = validateEmail(formData.email);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-
-  const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-    setTouched({ ...touched, [e.target.name]: true });
-  };
-
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    setTouched({
-      firstName: true, lastName: true, phone: true, email: true, password: true
-    });
-
-    setIsLoading(true);
-    setErrorMsg("");
-    setSuccessMsg("");
-
-    try {
-      const fullPhone = formatPhoneForBackend(formData.phone);
-
-      const response = await authService.register({
-        first_name: formData.firstName,
-        last_name: formData.lastName,
-        phone: fullPhone, 
-        email: formData.email,
-        password: formData.password,
-      });
-
-      if (response.data.status === "error") {
-        setErrorMsg(response.data.message || "Registration failed. Please try again.");
-      } else {
-        setSuccessMsg("Account created! Redirecting to login...");
-        setTimeout(() => router.push("/"), 2000);
-      }
-    } catch (error: any) {
-      setErrorMsg(error.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const {
+    showPassword,
+    isLoading,
+    errorMsg,
+    successMsg,
+    formData,
+    touched,
+    passwordCriteria,
+    isPhoneValid,
+    isEmailValid,
+    handleChange,
+    handleBlur,
+    handleRegister,
+    toggleShowPassword,
+  } = useRegisterForm();
 
   if (isChecking) return null;
 
   return (
-    <div className="min-h-screen flex flex-col justify-center px-6 py-12 bg-white">
+    <div className="flex-1 flex flex-col justify-center px-6 py-12 bg-white">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -233,7 +171,7 @@ export default function Register() {
               <button
                 type="button"
                 className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                onClick={() => setShowPassword(!showPassword)}
+                onClick={toggleShowPassword}
               >
                 {showPassword ? (
                   <EyeOff className="h-5 w-5 text-slate-400 hover:text-slate-600" />

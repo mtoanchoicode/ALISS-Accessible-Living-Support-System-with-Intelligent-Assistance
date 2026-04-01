@@ -17,10 +17,13 @@ export const authService = {
   },
   
   // Update 1: Save the token WITH a 1-day expiration timestamp
-  saveToken: (token: string) => {
+  saveToken: (token: string, userId?: string) => {
     const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 hours in milliseconds
     localStorage.setItem("aliss_token", token);
     localStorage.setItem("aliss_token_expires", expiresAt.toString());
+    if (userId) {
+      localStorage.setItem("aliss_user_id", userId);
+    }
   },
   
   // Update 2: Check expiration before returning the token
@@ -43,6 +46,7 @@ export const authService = {
   logout: () => {
     localStorage.removeItem("aliss_token");
     localStorage.removeItem("aliss_token_expires");
+    localStorage.removeItem("aliss_user_id");
   },
 
   logoutApi: async () => {

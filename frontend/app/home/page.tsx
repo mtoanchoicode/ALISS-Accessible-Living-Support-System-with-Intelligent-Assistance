@@ -3,9 +3,11 @@
 import { Search, Map, Clock, Bell, ArrowRight, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
+import { useUserProfile } from "@/hooks/useUserProfile";
 
 export default function HomePage() {
   const { isChecking } = useAuth();
+  const { profile, isLoading } = useUserProfile();
 
   if (isChecking) return null;
 
@@ -14,7 +16,9 @@ export default function HomePage() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Good morning,</h2>
-          <p className="text-slate-500">Jane Doe</p>
+          <p className="text-slate-500">
+            {isLoading ? "Loading..." : profile ? `${profile.first_name} ${profile.last_name}` : "Guest"}
+          </p>
         </div>
       </div>
 

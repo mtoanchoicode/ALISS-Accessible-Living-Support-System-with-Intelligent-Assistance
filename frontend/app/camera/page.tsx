@@ -1,33 +1,31 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { motion } from "motion/react";
 import { StopCircle, RefreshCw, Maximize2, Settings2 } from "lucide-react";
 import CameraView from "../../components/CameraView";
 import ItemModal from "@/components/ItemModal";
-import { DetectedObject, RegisteredItem } from "@/types/detection";
-import { captureSnapshot } from "@/lib/detectionUtils";
 import { useAuth } from "@/hooks/useAuth";
+import { useCameraControls } from "@/hooks/useCameraControls";
 
 export default function RecordPage() {
   const { isChecking } = useAuth();
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordingTime, setRecordingTime] = useState(0);
-  const [selectedObject, setSelectedObject] = useState<DetectedObject | null>(null);
-  const [snapshotUrl, setSnapshotUrl] = useState<string | null>(null);
-  const [isCameraActive, setIsCameraActive] = useState(true);
-
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isRecording) {
-      interval = setInterval(() => {
-        setRecordingTime((prev) => prev + 1);
-      }, 1000);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isRecording]);
+  
+  const {
+    isRecording,
+    recordingTime,
+    selectedObject,
+    snapshotUrl,
+    isCameraActive,
+    facingMode,
+    toggleRecording,
+    handleObjectSelect,
+    handleSaveItem,
+    handleCloseModal,
+    toggleFullScreen,
+    toggleFacingMode,
+    toggleCameraActive,
+  } = useCameraControls();
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60).toString().padStart(2, "0");
@@ -35,49 +33,7 @@ export default function RecordPage() {
     return `${m}:${s}`;
   };
 
-  const toggleRecording = () => {
-    if (isRecording) {
-      setIsRecording(false);
-      setRecordingTime(0);
-    } else {
-      setIsRecording(true);
-    }
-  };
-
-  const handleObjectSelect = (obj: DetectedObject, video: HTMLVideoElement) => {
-    if (isRecording) return; 
-
-    setSelectedObject(obj);
-    setIsCameraActive(false); 
-
-    const snap = captureSnapshot(video, obj.bbox);
-    setSnapshotUrl(snap);
-  };
-
-  const handleSaveItem = (itemData: Omit<RegisteredItem, "id" | "createdAt">) => {
-    const newItem: RegisteredItem = {
-      ...itemData,
-      id: `item-${Date.now()}`,
-      createdAt: Date.now(),
-    };
-
-    try {
-      const existingItems = JSON.parse(localStorage.getItem("registered_items") || "[]");
-      localStorage.setItem("registered_items", JSON.stringify([newItem, ...existingItems]));
-    } catch (error) {
-      console.error("Error saving to localStorage:", error);
-    }
-
-    setSelectedObject(null);
-    setSnapshotUrl(null);
-    setIsCameraActive(true);
-  };
-
-  const handleCloseModal = () => {
-    setSelectedObject(null);
-    setSnapshotUrl(null);
-    setIsCameraActive(true);
-  };
+  if (isChecking) return null;
 
   return (
     // Changed to h-[100dvh] for mobile browser safe areas
@@ -87,20 +43,24 @@ export default function RecordPage() {
           onObjectSelect={handleObjectSelect}
           selectedObjectId={selectedObject?.id}
           isActive={isCameraActive}
+          facingMode={facingMode}
         />
 
         <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/80 pointer-events-none" />
 
         <div className="absolute top-safe pt-6 left-4 right-4 flex justify-between items-start pointer-events-none z-20">
           <div className="flex flex-col space-y-2 pointer-events-auto">
-            <div className="flex items-center space-x-2 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full">
+            <button 
+              onClick={toggleCameraActive}
+              className="flex items-center space-x-2 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full hover:bg-black/60 transition-colors"
+            >
               <div
                 className={`w-2 h-2 rounded-full ${isCameraActive ? "bg-emerald-400 animate-pulse" : "bg-slate-400"}`}
               />
               <span className="text-white text-xs font-medium tracking-wide uppercase">
                 {isCameraActive ? "AI Active" : "Standby"}
               </span>
-            </div>
+            </button>
 
             {isRecording && (
               <motion.div
@@ -123,7 +83,10 @@ export default function RecordPage() {
 
         {/* Adjusted bottom spacing for mobile (pb-10) and larger touch targets */}
         <div className="absolute bottom-10 left-0 right-0 flex justify-center items-center space-x-8 pointer-events-none z-20">
-          <button className="w-14 h-14 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center text-white hover:bg-white/20 transition-colors pointer-events-auto">
+          <button 
+            onClick={toggleFacingMode}
+            className="w-14 h-14 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center text-white hover:bg-white/20 transition-colors pointer-events-auto"
+          >
             <RefreshCw className="w-6 h-6" />
           </button>
 
@@ -142,7 +105,10 @@ export default function RecordPage() {
             )}
           </button>
 
-          <button className="w-14 h-14 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center text-white hover:bg-white/20 transition-colors pointer-events-auto">
+          <button 
+            onClick={toggleFullScreen}
+            className="w-14 h-14 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center text-white hover:bg-white/20 transition-colors pointer-events-auto"
+          >
             <Maximize2 className="w-6 h-6" />
           </button>
         </div>

@@ -7,31 +7,31 @@ export default function Header() {
   const pathname = usePathname();
   const router = useRouter();
 
-  if (pathname === "/" || pathname === "/register") {
+  if (pathname === "/" || pathname === "/register" || pathname === "/camera") {
     return null;
   }
 
   const getTitle = () => {
     switch (pathname) {
-      case "/":
-        return "Dashboard";
+      case "/home":
+        return "Home";
       case "/chat":
         return "Memory Assistant";
-      case "/scanner":
-        return "Object Scanner";
+      case "/camera":
+        return "Camera";
       case "/live":
         return "Home Monitor";
       case "/storage":
-        return "Home Storage";
+        return "Storage";
       case "/profile":
         return "Settings";
       default:
-        return "MemoryMap";
+        return "ALISS";
     }
   };
 
   return (
-    <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100 px-4 py-4 flex items-center justify-between">
+    <header className="shrink-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100 px-4 py-4 flex items-center justify-between">
       <h1 className="text-xl font-semibold text-slate-800 tracking-tight">
         {getTitle()}
       </h1>

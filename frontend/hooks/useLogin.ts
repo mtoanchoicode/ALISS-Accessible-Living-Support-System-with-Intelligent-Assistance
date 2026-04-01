@@ -30,7 +30,7 @@ export function useLogin() {
       const response = await authService.login(cleanEmail, password);
       
       if (response.access_token) {
-        authService.saveToken(response.access_token);
+        authService.saveToken(response.access_token, response.user_id);
         router.push("/storage"); 
       } else {
         setErrorMsg("Invalid email or password. Please try again.");
