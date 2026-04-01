@@ -10,12 +10,10 @@ import {
   ChevronRight,
   Loader2,
 } from "lucide-react";
-import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { useUserProfile } from "@/hooks/useUserProfile";
 
 export default function ProfilePage() {
-  const { isChecking } = useAuth(); 
   const { isLoggingOut, handleLogout } = useProfile();
   const { profile, isLoading } = useUserProfile();
 
@@ -25,9 +23,6 @@ export default function ProfilePage() {
     { icon: Bell, label: "Notifications", color: "text-amber-500", bg: "bg-amber-50" },
     { icon: Shield, label: "Privacy & Security", color: "text-emerald-500", bg: "bg-emerald-50" },
   ];
-
-  // Don't flash the UI while checking authentication
-  if (isChecking) return null;
 
   return (
     <div className="p-4 space-y-6 pb-24">

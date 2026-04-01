@@ -10,12 +10,9 @@ import {
   Plus
 } from "lucide-react";
 import StorageSkeleton from "@/components/StorageSkeleton";
-import { useAuth } from "@/hooks/useAuth";
 import { useStorageSearch } from "@/hooks/useStorageSearch";
 
 export default function StoragePage() {
-  const { isChecking } = useAuth();
-  
   const {
     activeTab,
     setActiveTab,
@@ -25,9 +22,7 @@ export default function StoragePage() {
     isLoading,
     handleEdit,
     handleAddNew,
-  } = useStorageSearch(isChecking);
-
-  if (isChecking) return null;
+  } = useStorageSearch();
 
   return (
     <div className="p-4 space-y-6 pb-24">

@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useStorageData } from "@/hooks/useStorageData";
 
-export function useStorageSearch(isChecking: boolean) {
-  const { items, videos, isLoading } = useStorageData(isChecking);
+export function useStorageSearch() {
+  const { items, videos, isLoading } = useStorageData(false);
 
   const [activeTab, setActiveTab] = useState<"items" | "videos">("items");
   const [searchQuery, setSearchQuery] = useState("");

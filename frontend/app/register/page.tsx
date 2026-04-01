@@ -13,12 +13,9 @@ import {
   Circle
 } from "lucide-react";
 import { motion } from "motion/react";
-import { useAuth } from "@/hooks/useAuth";
 import { useRegisterForm } from "@/hooks/useRegisterForm";
 
 export default function Register() {
-  const { isChecking } = useAuth({ requireAuth: false });
-
   const {
     showPassword,
     isLoading,
@@ -34,8 +31,6 @@ export default function Register() {
     handleRegister,
     toggleShowPassword,
   } = useRegisterForm();
-
-  if (isChecking) return null;
 
   return (
     <div className="flex-1 flex flex-col justify-center px-6 py-12 bg-white">
