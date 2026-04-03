@@ -32,71 +32,74 @@ export default function ChatPage() {
 
   if (!currentSessionId) {
     return (
-      <div className="flex flex-col h-full bg-slate-50 p-4 space-y-6 pb-24">
-        <div className="flex items-center justify-between px-1">
-          <h2 className="text-xl font-bold text-slate-900">Recent Chats</h2>
-          <button 
-            onClick={createNewChat}
-            className="flex items-center space-x-2 bg-[#3F62C7] text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg shadow-[#3F62C7]/20 hover:bg-[#3F62C7] transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            <span>New Chat</span>
-          </button>
-        </div>
-
-        <div className="space-y-3">
-          {sessions.map((session) => (
-            <motion.div
-              key={session.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              onClick={() => setCurrentSessionId(session.id)}
-              className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors group"
+      <div className="flex flex-col h-full bg-slate-50 p-4 pb-24">
+        {sessions.length !== 0 && ( 
+          <div className="flex items-center justify-between px-1 mb-6">
+            <h2 className="text-xl font-bold text-slate-900">Recent Chats</h2>
+            <button 
+              onClick={createNewChat}
+              className="flex items-center space-x-2 bg-[#3F62C7] text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg shadow-[#3F62C7]/20 hover:bg-[#3F62C7] transition-all"
             >
-              <div className="flex items-center space-x-4 min-w-0">
-                <div className="w-12 h-12 bg-[#eff6ff] rounded-2xl flex items-center justify-center text-[#3F62C7] shrink-0">
-                  <MessageSquare className="w-6 h-6" />
-                </div>
-                <div className="min-w-0">
-                  <h4 className="font-bold text-slate-900 truncate">{session.title}</h4>
-                  <p className="text-xs text-slate-500 truncate mt-0.5">{session.lastMessage}</p>
-                  <div className="flex items-center space-x-2 mt-1.5">
-                    <Clock className="w-3 h-3 text-slate-400" />
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{session.timestamp}</span>
+              <Plus className="w-4 h-4" />
+              <span>New Chat</span>
+            </button>
+          </div>
+        )}
+       
+
+          {sessions.length === 0 ? (
+          <div className="flex-1 flex flex-col items-center justify-center text-center space-y-4 pb-12">
+            <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-sm">
+              <MessageSquare className="w-10 h-10 text-slate-200" />
+            </div>
+            <div className="space-y-1">
+              <p className="text-slate-900 font-bold">No conversations yet</p>
+              <p className="text-slate-500 text-sm">Start a new chat to find your items.</p>
+            </div>
+            <button 
+              onClick={createNewChat}
+              className="bg-[#3F62C7] text-white px-8 py-3 rounded-2xl font-bold shadow-lg shadow-[#3F62C7]/20 hover:bg-[#3F62C7] transition-all"
+            >
+              Start First Chat
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3 overflow-y-auto">
+            {sessions.map((session) => (
+              <motion.div
+                key={session.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                onClick={() => setCurrentSessionId(session.id)}
+                className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors group"
+              >
+                <div className="flex items-center space-x-4 min-w-0">
+                  <div className="w-12 h-12 bg-[#eff6ff] rounded-2xl flex items-center justify-center text-[#3F62C7] shrink-0">
+                    <MessageSquare className="w-6 h-6" />
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="font-bold text-slate-900 truncate">{session.title}</h4>
+                    <p className="text-xs text-slate-500 truncate mt-0.5">{session.lastMessage}</p>
+                    <div className="flex items-center space-x-2 mt-1.5">
+                      <Clock className="w-3 h-3 text-slate-400" />
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{session.timestamp}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="flex items-center space-x-2">
-                <button 
-                  onClick={(e) => deleteSession(e, session.id)}
-                  className="p-2 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-                <ChevronRight className="w-5 h-5 text-slate-300" />
-              </div>
-            </motion.div>
-          ))}
-
-          {sessions.length === 0 && (
-            <div className="py-20 text-center space-y-4">
-              <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto shadow-sm">
-                <MessageSquare className="w-10 h-10 text-slate-200" />
-              </div>
-              <div className="space-y-1">
-                <p className="text-slate-900 font-bold">No conversations yet</p>
-                <p className="text-slate-500 text-sm">Start a new chat to find your items.</p>
-              </div>
-              <button 
-                onClick={createNewChat}
-                className="bg-[#3F62C7] text-white px-8 py-3 rounded-2xl font-bold shadow-lg shadow-[#3F62C7]/20 hover:bg-[#3F62C7] transition-all"
-              >
-                Start First Chat
-              </button>
-            </div>
-          )}
+                <div className="flex items-center space-x-2">
+                  <button 
+                    onClick={(e) => deleteSession(e, session.id)}
+                    className="p-2 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                  <ChevronRight className="w-5 h-5 text-slate-300" />
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
         </div>
-      </div>
     );
   }
 

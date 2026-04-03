@@ -2,12 +2,22 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { User } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { useUserProfile } from "@/hooks/useUserProfile";
 
 export default function Header() {
   const pathname = usePathname();
   const router = useRouter();
+  
+  const { profile, initials, isLoading } = useUserProfile();
 
-  if (pathname === "/" || pathname === "/register" || pathname === "/camera" || pathname === "/profile" || pathname === "/edit") {
+  if (
+    pathname === "/" ||
+    pathname === "/register" ||
+    pathname === "/camera" ||
+    pathname === "/profile" ||
+    pathname === "/edit"
+  ) {
     return null;
   }
 
@@ -35,12 +45,26 @@ export default function Header() {
       <h1 className="text-xl font-semibold text-slate-800 tracking-tight">
         {getTitle()}
       </h1>
+      
       {pathname === "/home" && (
         <button
           onClick={() => router.push("/profile")}
-          className="w-10 h-10 bg-[#dbeafe] rounded-full flex items-center justify-center text-[#3F62C7] hover:bg-[#bfdbfe] transition-colors"
+          className="w-10 h-10 bg-[#dbeafe] rounded-full flex items-center justify-center text-[#3F62C7] hover:bg-[#bfdbfe] transition-colors overflow-hidden border border-blue-200 shadow-sm"
         >
-          <User className="w-6 h-6" />
+          {/* 2. The Fallback Avatar Logic */}
+          {isLoading ? (
+            <div className="w-full h-full animate-pulse bg-blue-200" />
+          ) : profile?.image_uri ? (
+            <img 
+              src={profile.image_uri} 
+              alt={`${profile.first_name}'s avatar`} 
+              className="w-full h-full object-cover"
+            />
+          ) : initials ? (
+            <span className="font-bold text-sm">{initials}</span>
+          ) : (
+            <User className="w-5 h-5" />
+          )}
         </button>
       )}
     </header>
