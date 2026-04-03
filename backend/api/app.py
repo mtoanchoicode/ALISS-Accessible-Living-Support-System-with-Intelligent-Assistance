@@ -15,7 +15,6 @@ from openai import OpenAI
 from PIL import Image
 from pydantic import BaseModel
 import time
-from fastapi.staticfiles import StaticFiles
 
 
 # Retrieval layer
@@ -263,8 +262,6 @@ def create_memory_v2(
             {"error": f"Memory creation failed: {e}"},
             status_code=500
         )
-
-app.mount("/images", StaticFiles(directory=IMAGE_DIR), name="images")
 
 @app.get("/memoryv2/objects")
 def list_graph_objects(user = Depends(get_current_user)):
