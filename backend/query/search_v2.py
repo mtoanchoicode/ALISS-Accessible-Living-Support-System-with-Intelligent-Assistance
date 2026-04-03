@@ -22,7 +22,7 @@ load_dotenv()
 # =========================================================
 GRAPH_SAVE_PATH = os.getenv("GRAPH_SAVE_PATH", "./home_memory_graph.pkl")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 EMBED_MODEL_NAME = os.getenv(
     "EMBED_MODEL_NAME",
     "sentence-transformers/all-MiniLM-L6-v2"
@@ -62,6 +62,21 @@ class GraphMemoryRetriever:
     def _node_id(name: str, node_type: str) -> str:
         return f"{node_type}::{name.lower().strip()}"
 
+    def _object_candidates(self, obj_name: str) -> List[tuple]:
+        canonical = obj_name.lower().strip()
+        return [
+            (nid, data)
+            for nid, data in self.graph.nodes(data=True)
+            if data.get("type") == "object" and data.get("name") == canonical
+        ]
+
+    def _latest_object_nid(self, obj_name: str) -> Optional[str]:
+        candidates = self._object_candidates(obj_name)
+        if not candidates:
+            return None
+        candidates.sort(key=lambda x: x[1].get("last_seen", 0), reverse=True)
+        return candidates[0][0]
+
     @staticmethod
     def _fmt_ts(ts: Optional[float]) -> str:
         if ts is None:
@@ -97,7 +112,7 @@ class GraphMemoryRetriever:
         return sorted(set(result))
 
     def has_exact_object(self, obj_name: str) -> bool:
-        return self._node_id(obj_name, "object") in self.graph
+        return self._latest_object_nid(obj_name) is not None
 
     def has_exact_room(self, room_name: str) -> bool:
         return self._node_id(room_name, "room") in self.graph
@@ -106,8 +121,8 @@ class GraphMemoryRetriever:
         return self._node_id(surface_name, "surface") in self.graph
 
     def get_object_attributes(self, obj_name: str) -> Dict[str, Any]:
-        obj_nid = self._node_id(obj_name, "object")
-        if obj_nid not in self.graph:
+        obj_nid = self._latest_object_nid(obj_name)
+        if not obj_nid:
             return {}
 
         raw = dict(self.graph.nodes[obj_nid])
@@ -122,8 +137,8 @@ class GraphMemoryRetriever:
         return cleaned
 
     def find_object_location(self, obj_name: str) -> Optional[Dict[str, Any]]:
-        obj_nid = self._node_id(obj_name, "object")
-        if obj_nid not in self.graph:
+        obj_nid = self._latest_object_nid(obj_name)
+        if not obj_nid:
             return None
 
         surface_nid = None
@@ -142,6 +157,7 @@ class GraphMemoryRetriever:
         obj_data = self.graph.nodes[obj_nid]
         return {
             "object": obj_data.get("name", obj_name.lower().strip()),
+            "object_id": obj_nid,
             "surface": self.graph.nodes[surface_nid].get("name") if surface_nid else None,
             "room": self.graph.nodes[room_nid].get("name") if room_nid else None,
             "last_seen": self._fmt_ts(obj_data.get("last_seen")),
@@ -150,8 +166,8 @@ class GraphMemoryRetriever:
         }
 
     def find_nearby_objects(self, obj_name: str) -> List[str]:
-        obj_nid = self._node_id(obj_name, "object")
-        if obj_nid not in self.graph:
+        obj_nid = self._latest_object_nid(obj_name)
+        if not obj_nid:
             return []
 
         result = []
@@ -319,7 +335,7 @@ You are an intent parser for a home-memory assistant.
 
 Return ONLY valid JSON with this schema:
 {{
-  "intent": "<where_is|near|in_room|on_surface|describe_object|last_seen|attributes|list_objects|list_rooms|list_surfaces|help|unknown>",
+  "intent": "<where_is|near|in_room|on_surface|describe_object|last_seen|attributes|followup_expand|list_objects|list_rooms|list_surfaces|help|unknown>",
   "raw_entity": "<string or null>",
   "object": "<string or null>",
   "room": "<string or null>",
@@ -334,6 +350,9 @@ Rules:
 - If the user asks about a room, prefer filling "room".
 - If the user asks about a surface, prefer filling "surface".
 - If unsure, keep the specific slot null and put the original mention in "raw_entity".
+- If the user says things like "can you be more specific", "be more specific", "tell me more", "more details", "elaborate", "expand on that", classify as "followup_expand".
+- For "followup_expand", use conversation state to continue talking about the most recently discussed entity.
+- If the follow-up is too vague and there is no useful conversation state, set "needs_clarification" to true.
 - Do not invent entities that are not implied by the user query or conversation state.
 - No extra keys.
 - No markdown.
@@ -383,6 +402,36 @@ def allowed_types_for_intent(intent: str) -> List[str]:
         return ["surface"]
     return ["object", "room", "surface"]
 
+def resolve_followup_from_state(state: ConversationState):
+    """
+    Convert vague follow-up queries like:
+    - can you be more specific
+    - tell me more
+    - elaborate
+    into a concrete graph action using conversation state.
+    """
+    if state.last_object:
+        return {
+            "effective_intent": "describe_object",
+            "entity_type": "object",
+            "entity_name": state.last_object,
+        }
+
+    if state.last_surface:
+        return {
+            "effective_intent": "on_surface",
+            "entity_type": "surface",
+            "entity_name": state.last_surface,
+        }
+
+    if state.last_room:
+        return {
+            "effective_intent": "in_room",
+            "entity_type": "room",
+            "entity_name": state.last_room,
+        }
+
+    return None
 
 def exact_match_entity(
     retriever: GraphMemoryRetriever,
@@ -475,6 +524,8 @@ def retrieve_with_graph(
             "describe the lamp",
             "when did you last see the lamp",
             "what color is the bottle",
+            "can you be more specific",
+            "tell me more about it",
             "list objects",
             "list rooms",
             "list surfaces",
@@ -492,6 +543,43 @@ def retrieve_facts_hybrid(
     parsed = llm_parse_query(query, state)
     intent = parsed.get("intent", "unknown")
     query_value = choose_query_value(parsed)
+
+    if intent == "followup_expand":
+        followup = resolve_followup_from_state(state)
+
+        if not followup:
+            return {
+                "intent": "followup_expand",
+                "effective_intent": None,
+                "query_value": None,
+                "parsed": parsed,
+                "resolved_entity": None,
+                "alternatives": [],
+                "data": None,
+                "resolution_status": "no_context_for_followup",
+            }
+
+        effective_intent = followup["effective_intent"]
+        entity_type = followup["entity_type"]
+        entity_name = followup["entity_name"]
+
+        resolved_entity = {
+            "type": entity_type,
+            "name": entity_name,
+            "score": 1.0,
+            "match_method": "context",
+        }
+
+        return {
+            "intent": "followup_expand",
+            "effective_intent": effective_intent,
+            "query_value": entity_name,
+            "parsed": parsed,
+            "resolved_entity": resolved_entity,
+            "alternatives": [],
+            "data": retrieve_with_graph(retriever, effective_intent, entity_name),
+            "resolution_status": "context_followup",
+        }
 
     if intent in {"list_objects", "list_rooms", "list_surfaces", "help"}:
         return {
@@ -598,6 +686,8 @@ Do not invent any object, room, surface, timestamp, nearby object, or attribute.
 If the facts are missing or resolution is uncertain, clearly say you do not know or ask the user to be more specific.
 If the resolved entity came from embedding with medium confidence, mention that you interpreted the query as that entity.
 If the intent is unknown, say that you could not understand the question and briefly suggest supported query styles.
+If the intent is "followup_expand", treat it as a request to provide more detail about the last discussed entity using the retrieved graph facts.
+If the resolution_status is "no_context_for_followup", say that you need the user to mention the object, room, or surface again more specifically.
 
 User question:
 {query}

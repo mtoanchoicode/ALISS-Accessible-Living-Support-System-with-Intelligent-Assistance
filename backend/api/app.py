@@ -53,6 +53,18 @@ origins = [
     # "https://your-production-domain.com", # Uncomment and change this when you deploy!
 ]
 
+#search_v2
+from pathlib import Path
+from collections import defaultdict
+
+from search_v2 import (
+    ConversationState,
+    GraphMemoryRetriever,
+    GraphEntityResolver,
+    retrieve_facts_hybrid,
+    llm_answer,
+    update_state,
+)
 # -------------------------------------------------------------------       
 # Environment & OpenAI setup
 # -------------------------------------------------------------------
@@ -442,6 +454,56 @@ def chat(body: ChatRequest, user = Depends(get_current_user)):
         "audio_base64": audio_b64,
         "audio_mime": audio_mime,
     }
+
+# -------------------------------------------------------------------
+# Chat (+ optional TTS in same response)
+# -------------------------------------------------------------------
+search_v2_memory = load_graph(Path(GRAPH_SAVE_PATH))
+search_v2_retriever = GraphMemoryRetriever(search_v2_memory)
+search_v2_resolver = GraphEntityResolver(search_v2_retriever)
+
+SEARCH_V2_SESSIONS: Dict[str, ConversationState] = defaultdict(ConversationState)
+
+class ChatV2Request(BaseModel):
+    session_id: str
+    message: str
+
+@app.post("/chats_v2")
+def chats_v2(body: ChatV2Request):
+    session_id = body.session_id
+    user_msg = body.message.strip()
+
+    if not user_msg:
+        return JSONResponse({"error": "Empty message"}, status_code=400)
+
+    state = SEARCH_V2_SESSIONS[session_id]
+
+    try:
+        # 1. Retrieve từ graph + embedding + OpenAI parse
+        facts = retrieve_facts_hybrid(
+            retriever=search_v2_retriever,
+            resolver=search_v2_resolver,
+            query=user_msg,
+            state=state,
+        )
+
+        # 2. Generate answer bằng OpenAI
+        answer = llm_answer(user_msg, facts)
+
+        # 3. Update conversation state
+        update_state(state, facts)
+
+        return {
+            "session_id": session_id,
+            "turn": state.turn,
+            "answer": answer,
+        }
+
+    except Exception as e:
+        return JSONResponse(
+            {"error": f"chats_v2 failed: {str(e)}"},
+            status_code=500
+        )
 
 # -------------------------------------------------------------------
 # Text to Speech (standalone)
