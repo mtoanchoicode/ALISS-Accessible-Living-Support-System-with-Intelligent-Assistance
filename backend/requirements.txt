@@ -74,3 +74,6 @@ uvicorn==0.38.0
 yarg==0.1.10
 supabase
 plotly
+tensorboard
+gdown
+torchreid
