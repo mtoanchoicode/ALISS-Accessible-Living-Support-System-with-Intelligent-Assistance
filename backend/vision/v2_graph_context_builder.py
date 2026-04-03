@@ -4,7 +4,7 @@ import re
 import time
 from io import BytesIO
 from pathlib import Path
-from typing import Dict, Union, Any, Optional
+from typing import Dict, List, Union, Any, Optional, Tuple
 
 import networkx as nx
 import matplotlib.pyplot as plt
@@ -13,6 +13,8 @@ from openai import OpenAI
 import pickle
 from datetime import datetime
 import plotly.graph_objects as go
+from collections import defaultdict
+import shutil
 from dotenv import load_dotenv
 import os
 load_dotenv()
@@ -40,8 +42,12 @@ Return ONLY a valid JSON object (no markdown fences, no extra text) with the fol
   }},
   "nearby_objects": ["<object1>", "<object2>"]
 }}
-
-Be concise and factual. Use lowercase for all values.
+Rules:
+Known objects in memory:
+*{known_objects}*
+- Prefer reusing existing object names from memory when possible
+- Do NOT introduce a new name if it likely refers to an existing object
+- Be concise and factual. Use lowercase for all values.
 """.strip()
 
 SURFACE_MAP = {
@@ -50,6 +56,7 @@ SURFACE_MAP = {
     "office desk": "table",
     "coffee table": "table",
     "dining table": "table",
+    "glass": "cup",
 }
 
 def normalize_surface(name):
@@ -59,11 +66,122 @@ def normalize_surface(name):
 class HomeMemoryGraph:
     def __init__(self):
         self.graph: nx.digraph = nx.DiGraph()
+        self.object_instance_counters: Dict[str, int] = defaultdict(int)
+
+    def _rebuild_object_counters(self):
+        """Call after unpickling a saved graph to keep instance counters correct."""
+        self.object_instance_counters.clear()
+        for nid, data in self.graph.nodes(data=True):
+            if data.get("type") == "object" and data.get("name"):
+                name = data["name"]
+                if nid.startswith(f"object::{name}::"):
+                    try:
+                        inst_str = nid.rsplit("::", 1)[-1]
+                        if inst_str.isdigit():
+                            self.object_instance_counters[name] = max(
+                                self.object_instance_counters[name], int(inst_str)
+                            )
+                            continue
+                    except:
+                        pass
+                # legacy node or fallback
+                self.object_instance_counters[name] = max(self.object_instance_counters[name], 1)
 
     @staticmethod
     def node_id(name: str, node_type: str) -> str:
         return f"{node_type}::{name.lower().strip()}"
     
+    @staticmethod
+    def _attribute_similarity(new_attrs: Dict[str, Any], existing_attrs: Dict[str, Any]) -> float:
+        """80% threshold logic. Placeholders (no attrs) = 100% match."""
+        keys = ["color", "material", "condition"]
+        if not new_attrs:
+            return 0.0
+
+        # No prior attributes (nearby placeholder) → treat as same object
+        if not existing_attrs or not any(k in existing_attrs for k in keys):
+            return 100.0
+
+        # Compare only keys that exist in BOTH
+        matches = 0
+        comparable = 0
+        for k in keys:
+            nv = new_attrs.get(k)
+            ev = existing_attrs.get(k)
+            if nv is not None and ev is not None:
+                comparable += 1
+                if nv == ev:
+                    matches += 1
+        if comparable == 0:
+            return 100.0
+        return (matches / comparable) * 100
+    
+    def _get_or_create_object(
+        self, name: str, attributes: Dict[str, Any], user_id: str, timestamp: float
+    ) -> str:
+        """Core deduplication logic (replaces old _get_or_create_object)."""
+        canonical_name = normalize_surface(name)
+        candidates = [
+            (nid, data)
+            for nid, data in self.graph.nodes(data=True)
+            if data.get("type") == "object" and data.get("name") == canonical_name
+        ]
+
+        if not attributes:  # Nearby placeholder mode
+            if candidates:
+                # Resolve to most recently seen instance
+                candidates.sort(key=lambda x: x[1].get("last_seen", 0), reverse=True)
+                return candidates[0][0]
+            # No existing → create placeholder
+            self.object_instance_counters[canonical_name] += 1
+            instance_num = self.object_instance_counters[canonical_name]
+            nid = f"object::{canonical_name}::{instance_num}"
+            self.graph.add_node(
+                nid,
+                type="object",
+                name=canonical_name,
+                last_seen=timestamp,
+                seen_by=user_id,
+            )
+            return nid
+
+        # Full observation (has attributes) → deduplication
+        if candidates:
+            best_nid = None
+            best_score = -1.0
+            for nid, data in candidates:
+                existing_attrs = {
+                    k: data.get(k)
+                    for k in ["color", "material", "condition"]
+                    if data.get(k) is not None
+                }
+                score = self._attribute_similarity(attributes, existing_attrs)
+                if score > best_score:
+                    best_score = score
+                    best_nid = nid
+
+            if best_score == 100.0:
+                # Same physical object (or placeholder) → update
+                self.graph.nodes[best_nid].update(attributes)
+                self.graph.nodes[best_nid]["last_seen"] = timestamp
+                self.graph.nodes[best_nid]["seen_by"] = user_id
+                return best_nid
+            # Different object (attributes differ too much) → new instance
+
+        # No good match or no candidates → create new instance
+        self.object_instance_counters[canonical_name] += 1
+        instance_num = self.object_instance_counters[canonical_name]
+        nid = f"object::{canonical_name}::{instance_num}"
+        node_data = {
+            "type": "object",
+            "name": canonical_name,
+            "last_seen": timestamp,
+            "seen_by": user_id,
+            **attributes,
+        }
+        self.graph.add_node(nid, **node_data)
+        return nid
+
     def _get_or_create_room(self, room_name: str) -> str:
         nid = self.node_id(room_name, "room")
         if nid not in self.graph:
@@ -81,26 +199,6 @@ class HomeMemoryGraph:
             self.graph.add_edge(nid, room_nid, relation="in")
         elif not self.graph.has_edge(nid, room_nid):
             self.graph.add_edge(nid, room_nid, relation="in")
-        return nid
-    
-    def _get_or_create_object(self, name: str, attributes: Dict[str, Any], user_id: str, timestamp: float) -> str:
-        nid = self.node_id(name, "object")
-
-        if nid not in self.graph:
-            node_data = {
-                "type": "object",
-                "name": name.lower().strip(),
-                "last_seen": timestamp,
-                "seen_by": user_id, # Track who saw it
-                **attributes
-            }
-            self.graph.add_node(nid, **node_data)
-        else:
-            # Update attributes and metadata for existing objects
-            self.graph.nodes[nid].update(attributes)
-            self.graph.nodes[nid]["last_seen"] = timestamp
-            self.graph.nodes[nid]["seen_by"] = user_id
-
         return nid
 
     def _clear_old_on_edges(self, obj_nid: str):
@@ -128,15 +226,12 @@ class HomeMemoryGraph:
 
         # Nearby objects (undirected next_to)
         for nb_name in nearby:
-            nb_nid = self.node_id(nb_name, "object")
-            if nb_nid not in self.graph:
-                self.graph.add_node(nb_nid, type="object", name=nb_name.lower().strip(),
-                                    last_seen=timestamp, seen_by=user_id)
-
+            nb_nid = self._get_or_create_object(nb_name, {}, user_id, timestamp)   # ← empty = nearby mode
             if not self.graph.has_edge(obj_nid, nb_nid):
                 self.graph.add_edge(obj_nid, nb_nid, relation="next_to")
             if not self.graph.has_edge(nb_nid, obj_nid):
                 self.graph.add_edge(nb_nid, obj_nid, relation="next_to")
+        return obj_nid
 
     def print_summary(self):
         print("\n=== GRAPH SUMMARY ===")
@@ -149,6 +244,48 @@ class HomeMemoryGraph:
         for u, v, data in self.graph.edges(data=True):
             print(f"{u} -> {v} [{data.get('relation')}]")
 
+    def update_node(self, nid: str, updates: Dict[str, Any]) -> bool:
+        """Update attributes of an existing node."""
+        if nid not in self.graph:
+            return False
+
+        # Update node data
+        self.graph.nodes[nid].update(updates)
+
+        # Optional: auto-update last_seen if provided
+        if "last_seen" in updates:
+            self.graph.nodes[nid]["last_seen"] = updates["last_seen"]
+
+        return True
+
+    def delete_node(self, nid: str) -> bool:
+        """Delete a node and its edges safely."""
+        if nid not in self.graph:
+            return False
+
+        node_data = self.graph.nodes[nid]
+        name = node_data.get("name")
+        node_type = node_data.get("type")
+
+        # Remove node (also removes all edges automatically)
+        self.graph.remove_node(nid)
+
+        # Optional: adjust counter (not strictly required but cleaner)
+        if node_type == "object" and name in self.object_instance_counters:
+            # Note: we DON'T decrement to avoid ID reuse bugs
+            pass
+
+        return True
+    
+    def list_nodes(self, node_type: str = None) -> List[Tuple[str, Dict[str, Any]]]:
+        """Return all nodes, optionally filtered by type."""
+        if node_type:
+            return [
+                (nid, data)
+                for nid, data in self.graph.nodes(data=True)
+                if data.get("type") == node_type
+            ]
+        return list(self.graph.nodes(data=True))
 
     def plot_graph(self):
         # 1. Calculate positions using networkx
@@ -222,46 +359,6 @@ class HomeMemoryGraph:
 
         fig.show()
 
-    # def plot_graph(self):
-    #     plt.figure()
-    #     pos = nx.spring_layout(self.graph, seed=42)
-
-    #     node_colors = []
-    #     for _, data in self.graph.nodes(data=True):
-    #         ntype = data.get("type")
-
-    #         if ntype == "room":
-    #             node_colors.append("lightblue")
-    #         elif ntype == "surface":
-    #             node_colors.append("lightgreen")
-    #         elif ntype == "object":
-    #             node_colors.append("salmon")
-    #         else:
-    #             node_colors.append("gray")
-
-    #     # Draw nodes with colors
-    #     nx.draw_networkx_nodes(self.graph, pos, node_color=node_colors)
-
-    #     # Draw edges
-    #     nx.draw_networkx_edges(self.graph, pos)
-
-    #     # Labels
-    #     labels = {
-    #         nid: data.get("name", nid)
-    #         for nid, data in self.graph.nodes(data=True)
-    #     }
-    #     nx.draw_networkx_labels(self.graph, pos, labels=labels)
-
-    #     # Edge labels
-    #     edge_labels = {
-    #         (u, v): d.get("relation", "")
-    #         for u, v, d in self.graph.edges(data=True)
-    #     }
-    #     nx.draw_networkx_edge_labels(self.graph, pos, edge_labels=edge_labels)
-
-    #     plt.title("Home Memory Graph")
-    #     plt.show()
-        
 
 def image_to_base64(image_input: Union[str, Path, Image.Image, bytes]) -> str:
     if isinstance(image_input, (str, Path)):
@@ -280,12 +377,13 @@ def image_to_base64(image_input: Union[str, Path, Image.Image, bytes]) -> str:
 
 def describe_object(
     image: Union[str, Path, Image.Image, bytes],
+    graph: HomeMemoryGraph,
     object_name: str,
     prompt_template: str = DESCRIPTION_PROMPT_TEMPLATE
 ) -> Dict[str, Any]:
     b64_image = image_to_base64(image)
 
-    prompt = prompt_template.format(object_name=object_name)
+    prompt = prompt_template.format(object_name=object_name, known_objects = ", ".join(sorted({data["name"].strip().lower() for _, data in graph.graph.nodes(data=True) if data.get("type") == "object" and data.get("name")})))
 
     response = client.chat.completions.create(
         model=VISION_MODEL,
@@ -340,15 +438,35 @@ def process_and_remember_observation(
     object_name: str,
     room_name: str,
     user_id: str,
+    image_storage_dir: str,
     timestamp: Optional[float] = None,
-    save_path: Optional[Union[str, Path]] = None
+    save_path: Optional[Union[str, Path]] = None,
 ) -> Dict[str, Any]:
-    description = describe_object(image, object_name)
+    description = describe_object(image, graph, object_name)
 
     if timestamp is None:
         timestamp = time.time()
 
-    graph.add_observation(description, room_name, user_id, timestamp)
+    obj_nid = graph.add_observation(description, room_name, user_id, timestamp)
+
+    if obj_nid:
+        os.makedirs(image_storage_dir, exist_ok=True)
+        
+        safe_filename = f"{obj_nid.replace('::', '_')}_{int(timestamp)}.jpg"
+        full_image_path = os.path.join(image_storage_dir, safe_filename)
+        
+        # Save the image (assuming 'image' is bytes or path; if PIL, use .save())
+        if isinstance(image, (str, Path)):
+            shutil.copy(image, full_image_path)
+        elif isinstance(image, Image.Image):
+            image.save(full_image_path)
+        else: # bytes
+            with open(full_image_path, "wb") as f:
+                f.write(image)
+        
+        # 4. Attach URI to the node so frontend can access it
+        # You can use a relative path or a full URL here depending on your server
+        graph.graph.nodes[obj_nid]["image_uri"] = f"/images/{safe_filename}"
 
     if save_path:
         save_graph(graph, save_path)

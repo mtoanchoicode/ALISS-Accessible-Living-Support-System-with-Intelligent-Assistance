@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 from dotenv import load_dotenv
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, Form, UploadFile, BackgroundTasks
+from fastapi import FastAPI, File, Form, UploadFile, BackgroundTasks, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from openai import OpenAI
@@ -21,10 +21,10 @@ import time
 from query.search import search as kb_search
 # Vision ingestion
 from vision.context_builder import describe_and_save
-from vision.v2_graph_context_builder import load_graph, process_and_remember_observation
+from vision.v2_graph_context_builder import save_graph, load_graph, process_and_remember_observation
 
 # Auth API
-from services.auth_service import login as auth_login, register as auth_register
+from services.auth_service import login_user as auth_login, register_user as auth_register, logout_user as auth_logout
 
 # Item API
 from services.item_service import (
@@ -53,6 +53,18 @@ origins = [
     # "https://your-production-domain.com", # Uncomment and change this when you deploy!
 ]
 
+#search_v2
+from pathlib import Path
+from collections import defaultdict
+
+from query.search_v2 import (
+    ConversationState,
+    GraphMemoryRetriever,
+    GraphEntityResolver,
+    retrieve_facts_hybrid,
+    llm_answer,
+    update_state,
+)
 # -------------------------------------------------------------------       
 # Environment & OpenAI setup
 # -------------------------------------------------------------------
@@ -67,6 +79,9 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 
 GRAPH_SAVE_PATH = "./home_memory_graph.pkl"
 memory = load_graph(GRAPH_SAVE_PATH)
+IMAGE_DIR = "./memory_images"
+if not os.path.exists(IMAGE_DIR):
+    os.makedirs(IMAGE_DIR)
 
 from pathlib import Path
 from services.reid_service import ReIDConfig, PersonReIDRunner
@@ -215,7 +230,7 @@ def create_memory(
     except Exception as e:
         return JSONResponse({"error": f"Memory creation failed: {e}"}, status_code=500)
     
-def process_memory_v2_background(contents: bytes, obj_name: str, location: str, user_id: str, timestamp: float):
+def process_memory_v2_background(contents: bytes, obj_name: str, location: str, user_id: str, timestamp: float, image_storage_dir: str):
     try:
         pil_image = Image.open(io.BytesIO(contents)).convert("RGB")
         process_and_remember_observation(
@@ -225,7 +240,8 @@ def process_memory_v2_background(contents: bytes, obj_name: str, location: str, 
             room_name=location,
             user_id=user_id,
             timestamp=timestamp,
-            save_path=GRAPH_SAVE_PATH
+            save_path=GRAPH_SAVE_PATH,
+            image_storage_dir = image_storage_dir
         )
     except Exception as e:
         print(f"Background task (memoryv2) failed: {e}")
@@ -238,6 +254,7 @@ def create_memory_v2(
     image: UploadFile = File(...),
     user = Depends(get_current_user),
     timestamp: float = time.time(),
+    image_storage_dir = "./memory_images",
     model: str = Form("gpt-4o"),
 ):
     try:
@@ -247,8 +264,9 @@ def create_memory_v2(
             contents=contents,
             obj_name=obj_name,
             location=location,
-            user_id=user.id,
-            timestamp=timestamp
+            user_id=user["first_name"],
+            timestamp=timestamp,
+            image_storage_dir = image_storage_dir
         )
         return JSONResponse({"status": "Processing Memory", "message": "Image queued."}, status_code=202)
     except Exception as e:
@@ -257,13 +275,86 @@ def create_memory_v2(
             status_code=500
         )
 
+@app.get("/memoryv2/objects")
+def list_graph_objects(user = Depends(get_current_user)):
+    try:
+        objects = [
+            {
+                "id": nid,
+                **data
+            }
+            for nid, data in memory.graph.nodes(data=True)
+            if data.get("type") == "object"
+        ]
+        return {"count": len(objects), "objects": objects}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+    
+class UpdateGraphObjectRequest(BaseModel):
+    node_id: str
+    updates: Dict[str, Any]
+
+@app.put("/memoryv2/object")
+def update_graph_object(
+    payload: UpdateGraphObjectRequest,
+    user = Depends(get_current_user)
+):
+    try:
+        nid = payload.node_id
+
+        if nid not in memory.graph:
+            return JSONResponse({"error": "Node not found"}, status_code=404)
+
+        # Update node
+        memory.graph.nodes[nid].update(payload.updates)
+
+        # Optional: update last_seen
+        memory.graph.nodes[nid]["last_seen"] = time.time()
+
+        save_graph(memory, GRAPH_SAVE_PATH)
+
+        return {
+            "status": "updated",
+            "node": {
+                "id": nid,
+                **memory.graph.nodes[nid]
+            }
+        }
+
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+    
+class DeleteGraphObjectRequest(BaseModel):
+    node_id: str
+
+@app.delete("/memoryv2/object")
+def delete_graph_object(
+    payload: DeleteGraphObjectRequest,
+    user = Depends(get_current_user)
+):
+    try:
+        nid = payload.node_id
+
+        if nid not in memory.graph:
+            return JSONResponse({"error": "Node not found"}, status_code=404)
+
+        memory.graph.remove_node(nid)
+
+        return {
+            "status": "deleted",
+            "node_id": nid
+        }
+
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
 
 # -------------------------------------------------------------------
 # Chat (+ optional TTS in same response)
 # -------------------------------------------------------------------
 @app.get("/chats")
 def list_chats(user = Depends(get_current_user)):
-    return get_user_sessions(user.id)
+    return get_user_sessions(user["id"])
 
 @app.get("/chats/{session_id}/messages")
 def list_chat_messages(session_id: str, user = Depends(get_current_user)):
@@ -281,7 +372,7 @@ def chat(body: ChatRequest, user = Depends(get_current_user)):
     session_id = body.session_id
     if not session_id:
         title = user_msg[:30] + ("..." if len(user_msg) > 30 else "")
-        new_session = create_session(user.id, title)
+        new_session = create_session(user["id"], title)
         if not new_session:
             return JSONResponse({"error": "Failed to create DB session"}, status_code=500)
         session_id = new_session["id"]
@@ -365,6 +456,56 @@ def chat(body: ChatRequest, user = Depends(get_current_user)):
     }
 
 # -------------------------------------------------------------------
+# Chat (+ optional TTS in same response)
+# -------------------------------------------------------------------
+search_v2_memory = load_graph(Path(GRAPH_SAVE_PATH))
+search_v2_retriever = GraphMemoryRetriever(search_v2_memory)
+search_v2_resolver = GraphEntityResolver(search_v2_retriever)
+
+SEARCH_V2_SESSIONS: Dict[str, ConversationState] = defaultdict(ConversationState)
+
+class ChatV2Request(BaseModel):
+    session_id: str
+    message: str
+
+@app.post("/chats_v2")
+def chats_v2(body: ChatV2Request):
+    session_id = body.session_id
+    user_msg = body.message.strip()
+
+    if not user_msg:
+        return JSONResponse({"error": "Empty message"}, status_code=400)
+
+    state = SEARCH_V2_SESSIONS[session_id]
+
+    try:
+        # 1. Retrieve từ graph + embedding + OpenAI parse
+        facts = retrieve_facts_hybrid(
+            retriever=search_v2_retriever,
+            resolver=search_v2_resolver,
+            query=user_msg,
+            state=state,
+        )
+
+        # 2. Generate answer bằng OpenAI
+        answer = llm_answer(user_msg, facts)
+
+        # 3. Update conversation state
+        update_state(state, facts)
+
+        return {
+            "session_id": session_id,
+            "turn": state.turn,
+            "answer": answer,
+        }
+
+    except Exception as e:
+        return JSONResponse(
+            {"error": f"chats_v2 failed: {str(e)}"},
+            status_code=500
+        )
+
+# -------------------------------------------------------------------
 # Text to Speech (standalone)
 # -------------------------------------------------------------------
 @app.post("/speech")
@@ -416,6 +557,19 @@ async def register_endpoint(req: RegisterRequest): # Unique name
     )
     if isinstance(result, dict) and result.get("status") == "error":
         return JSONResponse(status_code=400, content=result)
+    return result
+
+@app.post("/auth/logout")
+async def logout_endpoint(authorization: str = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        # Even if they don't have a token, we just tell the frontend "success" 
+        # so it clears the local state anyway.
+        return {"status": "success"}
+
+    # Extract the token without the "Bearer " part
+    token = authorization.split(" ")[1]
+    
+    result = auth_logout(token)
     return result
 
 # -------------------------------------------------------------------
@@ -557,14 +711,14 @@ async def edit_video(video_id: str, update_data: dict):
 # -------------------------------------------------------------------
 @app.get("/users/me")
 async def read_user_profile(user = Depends(get_current_user)):
-    profile = fetch_user_profile(user.id)
+    profile = fetch_user_profile(user["id"])
     if profile:
         return profile
     return JSONResponse(status_code=404, content={"error": "User not found"})
 
 @app.put("/users/me")
 async def update_user_profile(update_data: dict, user = Depends(get_current_user)):
-    updated_profile = edit_user_profile(user.id, update_data)
+    updated_profile = edit_user_profile(user["id"], update_data)
     if updated_profile:
         return updated_profile
     return JSONResponse(status_code=400, content={"error": "Failed to update user profile"})
