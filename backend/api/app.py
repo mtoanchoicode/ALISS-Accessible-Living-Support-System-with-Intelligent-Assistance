@@ -21,7 +21,7 @@ import time
 from query.search import search as kb_search
 # Vision ingestion
 from vision.context_builder import describe_and_save
-from vision.v2_graph_context_builder import load_graph, process_and_remember_observation
+from vision.v2_graph_context_builder import save_graph, load_graph, process_and_remember_observation
 
 # Auth API
 from services.auth_service import login as auth_login, register as auth_register
@@ -238,6 +238,79 @@ def create_memory_v2(
             {"error": f"Memory creation failed: {e}"},
             status_code=500
         )
+
+@app.get("/memoryv2/objects")
+def list_graph_objects(user = Depends(get_current_user)):
+    try:
+        objects = [
+            {
+                "id": nid,
+                **data
+            }
+            for nid, data in memory.graph.nodes(data=True)
+            if data.get("type") == "object"
+        ]
+        return {"count": len(objects), "objects": objects}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+    
+class UpdateGraphObjectRequest(BaseModel):
+    node_id: str
+    updates: Dict[str, Any]
+
+@app.put("/memoryv2/object")
+def update_graph_object(
+    payload: UpdateGraphObjectRequest,
+    user = Depends(get_current_user)
+):
+    try:
+        nid = payload.node_id
+
+        if nid not in memory.graph:
+            return JSONResponse({"error": "Node not found"}, status_code=404)
+
+        # Update node
+        memory.graph.nodes[nid].update(payload.updates)
+
+        # Optional: update last_seen
+        memory.graph.nodes[nid]["last_seen"] = time.time()
+
+        save_graph(memory, GRAPH_SAVE_PATH)
+
+        return {
+            "status": "updated",
+            "node": {
+                "id": nid,
+                **memory.graph.nodes[nid]
+            }
+        }
+
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+    
+class DeleteGraphObjectRequest(BaseModel):
+    node_id: str
+
+@app.delete("/memoryv2/object")
+def delete_graph_object(
+    payload: DeleteGraphObjectRequest,
+    user = Depends(get_current_user)
+):
+    try:
+        nid = payload.node_id
+
+        if nid not in memory.graph:
+            return JSONResponse({"error": "Node not found"}, status_code=404)
+
+        memory.graph.remove_node(nid)
+
+        return {
+            "status": "deleted",
+            "node_id": nid
+        }
+
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 # -------------------------------------------------------------------
