@@ -1,4 +1,5 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://192.168.20.76:8000";
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://192.168.1.202:8000";
+
 
 export const apiClient = async (
   endpoint: string,
@@ -25,11 +26,10 @@ export const apiClient = async (
   });
 
   if (response.status === 401) {
-    console.error("Authentication failed. Token missing or expired.");
+    const errText = await response.text();
+    console.error("Authentication failed 401:", errText);
     if (typeof window !== "undefined") {
-      localStorage.removeItem("aliss_token");
-      localStorage.removeItem("aliss_token_expires");
-      window.location.href = "/"; // Force redirect to login
+       alert("ALISS API 401 Unauthorized Error: " + errText);
     }
     throw new Error("Unauthorized");
   }
