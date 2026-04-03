@@ -7,7 +7,8 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, Form, UploadFile
+from dotenv import load_dotenv
+from fastapi import FastAPI, File, Form, UploadFile, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from openai import OpenAI
@@ -31,10 +32,20 @@ from services.item_service import (
 )
 # Video API
 from services.video_service import (
-    get_video, update_video, delete_video, create_video, get_all_videos as fetch_videos
+    get_video, update_video, delete_video, create_video, get_all_videos as fetch_videos, upload_video_file
 )
 # User API
-from services.user_service import get_profile as fetch_user_profile
+from services.user_service import (
+    get_profile as fetch_user_profile,
+    update_profile as edit_user_profile
+)
+# Chat DB API
+from services.chat_service import (
+    get_user_sessions, create_session, get_session_messages, save_message, update_session_title
+)
+
+from api.deps import get_current_user
+from fastapi import Depends
 
 origins = [
     "http://localhost:3000",      # Standard Next.js port
@@ -119,7 +130,7 @@ def tts_mp3_bytes(text: str, voice: str) -> bytes:
 # Models
 # -------------------------------------------------------------------
 class ChatRequest(BaseModel):
-    session_id: str
+    session_id: Optional[str] = None
     message: str
     k: int = 5
     with_tts: bool = False
@@ -151,40 +162,45 @@ def health():
 # -------------------------------------------------------------------
 # Context Builder
 # -------------------------------------------------------------------
+
+def process_memory_background(contents: bytes, obj_name: str, location: str, model: str):
+    try:
+        bgr = uploadfile_to_bgr_numpy_raw(contents)
+        describe_and_save(obj_name=obj_name, image=bgr, location=location, model=model)
+    except Exception as e:
+         print(f"Background task (memory) failed: {e}")
+
+def uploadfile_to_bgr_numpy_raw(data: bytes) -> np.ndarray:
+    img = Image.open(io.BytesIO(data)).convert("RGB")
+    arr = np.array(img)
+    return arr[..., ::-1].copy()
+
 @app.post("/memory")
 def create_memory(
+    background_tasks: BackgroundTasks,
     obj_name: str = Form(...),
     location: str = Form(...),
     image: UploadFile = File(...),
     model: str = Form("gpt-4o"),
-):
-    try:
-        bgr = uploadfile_to_bgr_numpy(image)
-        record = describe_and_save(
-            obj_name=obj_name,
-            image=bgr,
-            location=location,
-            model=model,
-        )
-        return {"saved": True, "record": record}
-    except Exception as e:
-        return JSONResponse({"error": f"Memory creation failed: {e}"}, status_code=500)
-    
-    
-@app.post("/memoryv2")
-def create_memory_v2(
-    obj_name: str = Form(...),
-    location: str = Form(...),
-    image: UploadFile = File(...),
-    user_id = "user",
-    timestamp = time.time(),
-    model: str = Form("gpt-4o"),
+    user = Depends(get_current_user),
 ):
     try:
         contents = image.file.read()
+        background_tasks.add_task(
+            process_memory_background,
+            contents=contents,
+            obj_name=obj_name,
+            location=location,
+            model=model
+        )
+        return JSONResponse({"status": "Processing Memory", "message": "Image queued"}, status_code=202)
+    except Exception as e:
+        return JSONResponse({"error": f"Memory creation failed: {e}"}, status_code=500)
+    
+def process_memory_v2_background(contents: bytes, obj_name: str, location: str, user_id: str, timestamp: float):
+    try:
         pil_image = Image.open(io.BytesIO(contents)).convert("RGB")
-
-        record = process_and_remember_observation(
+        process_and_remember_observation(
             graph=memory,
             image=pil_image,
             object_name=obj_name,
@@ -193,9 +209,30 @@ def create_memory_v2(
             timestamp=timestamp,
             save_path=GRAPH_SAVE_PATH
         )
-
-        return {"saved": True, "record": record}
-
+    except Exception as e:
+        print(f"Background task (memoryv2) failed: {e}")
+    
+@app.post("/memoryv2")
+def create_memory_v2(
+    background_tasks: BackgroundTasks,
+    obj_name: str = Form(...),
+    location: str = Form(...),
+    image: UploadFile = File(...),
+    user = Depends(get_current_user),
+    timestamp: float = time.time(),
+    model: str = Form("gpt-4o"),
+):
+    try:
+        contents = image.file.read()
+        background_tasks.add_task(
+            process_memory_v2_background,
+            contents=contents,
+            obj_name=obj_name,
+            location=location,
+            user_id=user.id,
+            timestamp=timestamp
+        )
+        return JSONResponse({"status": "Processing Memory", "message": "Image queued."}, status_code=202)
     except Exception as e:
         return JSONResponse(
             {"error": f"Memory creation failed: {e}"},
@@ -206,17 +243,36 @@ def create_memory_v2(
 # -------------------------------------------------------------------
 # Chat (+ optional TTS in same response)
 # -------------------------------------------------------------------
+@app.get("/chats")
+def list_chats(user = Depends(get_current_user)):
+    return get_user_sessions(user.id)
+
+@app.get("/chats/{session_id}/messages")
+def list_chat_messages(session_id: str, user = Depends(get_current_user)):
+    return get_session_messages(session_id)
+
 @app.post("/chat")
-def chat(body: ChatRequest):
-    session_id = body.session_id
+def chat(body: ChatRequest, user = Depends(get_current_user)):
     user_msg = body.message.strip()
     k = body.k
 
     if not user_msg:
         return JSONResponse({"error": "Empty message"}, status_code=400)
 
+    # 1. Connect or Initialize DB Session
+    session_id = body.session_id
+    if not session_id:
+        title = user_msg[:30] + ("..." if len(user_msg) > 30 else "")
+        new_session = create_session(user.id, title)
+        if not new_session:
+            return JSONResponse({"error": "Failed to create DB session"}, status_code=500)
+        session_id = new_session["id"]
+        
+    save_message(session_id, "user", user_msg)
+
+    # 2. Extract ephemeral contextual memory map
     state = SESSIONS[session_id]
-    state["turn"] += 1
+    state["turn"] = state.get("turn", 0) + 1
 
     # retrieval on first turn (or if evidence missing)
     if state["turn"] == 1 or not state.get("last_evidence"):
@@ -226,10 +282,12 @@ def chat(body: ChatRequest):
         if not evidence:
             state["last_question"] = user_msg
             state["last_evidence"] = []
+            no_record_ans = "I don’t have any records for that yet."
+            save_message(session_id, "ai", no_record_ans)
             return {
                 "session_id": session_id,
                 "turn": state["turn"],
-                "answer": "I don’t have any records for that yet.",
+                "answer": no_record_ans,
                 "evidence": [],
                 "audio_base64": None,
                 "audio_mime": None,
@@ -275,6 +333,9 @@ def chat(body: ChatRequest):
         except Exception:
             audio_b64 = None
             audio_mime = None
+
+    # 3. Finalize DB Pipeline
+    save_message(session_id, "ai", answer_text)
 
     return {
         "session_id": session_id,
@@ -352,15 +413,15 @@ async def read_all_items():
     return fetch_items()
 
 @app.post("/items")
-async def create_new_item(item_data: dict):
+async def create_new_item(item_data: dict, user = Depends(get_current_user)):
     return create_item(item_data)
 
 @app.delete("/items/{item_id}")
-async def remove_item(item_id: str):
+async def remove_item(item_id: str, user = Depends(get_current_user)):
     return delete_item(item_id)
 
 @app.put("/items/{item_id}")
-async def edit_item(item_id: str, update_data: dict):
+async def edit_item(item_id: str, update_data: dict, user = Depends(get_current_user)):
     return update_item(item_id, update_data)
 
 # -------------------------------------------------------------------
@@ -379,6 +440,35 @@ async def read_all_videos():
 async def create_new_video(video_data: dict):
     return create_video(video_data)
 
+@app.post("/videos/upload")
+async def upload_video_endpoint(
+    name: str = Form(...),
+    file: UploadFile = File(...)
+):
+    try:
+        contents = await file.read()
+        storage_res = upload_video_file(contents, file.filename)
+        
+        if storage_res.get("status") == "error":
+            return JSONResponse(status_code=500, content={"error": storage_res["message"]})
+            
+        public_url = storage_res["url"]
+        
+        # Link DB Record securely 
+        video_data = {
+            "name": name,
+            "video_uri": public_url,
+            "source_type": "mobile"
+        }
+        
+        record = create_video(video_data)
+        return {"saved": True, "record": record}
+    except Exception as e:
+        return JSONResponse(
+            {"error": f"Video upload sequence failed: {e}"},
+            status_code=500
+        )
+
 @app.delete("/videos/{video_id}")
 async def remove_video(video_id: str):
     return delete_video(video_id)
@@ -390,12 +480,19 @@ async def edit_video(video_id: str, update_data: dict):
 # -------------------------------------------------------------------
 # User API
 # -------------------------------------------------------------------
-@app.get("/users/{user_id}")
-async def read_user_profile(user_id: str):
-    profile = fetch_user_profile(user_id)
+@app.get("/users/me")
+async def read_user_profile(user = Depends(get_current_user)):
+    profile = fetch_user_profile(user.id)
     if profile:
         return profile
     return JSONResponse(status_code=404, content={"error": "User not found"})
+
+@app.put("/users/me")
+async def update_user_profile(update_data: dict, user = Depends(get_current_user)):
+    updated_profile = edit_user_profile(user.id, update_data)
+    if updated_profile:
+        return updated_profile
+    return JSONResponse(status_code=400, content={"error": "Failed to update user profile"})
 
 #--------------------------------------------------
 # Root
