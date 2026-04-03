@@ -32,11 +32,10 @@ export default function Login() {
           <h2 className="text-3xl font-bold text-slate-900 tracking-tight">
             Welcome back
           </h2>
-          <p className="mt-2 text-slate-500">Sign in to ALISS MemoryMap</p>
+          <p className="mt-2 text-slate-500">Sign in to ALISS</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6 max-w-sm mx-auto">
-          {/* Backend Error Message from useLogin Hook */}
           {errorMsg && (
             <div className="p-3 bg-red-50 text-red-600 text-sm rounded-xl border border-red-100 text-center">
               {errorMsg}
@@ -58,7 +57,7 @@ export default function Login() {
                 onChange={(e) => setEmail(e.target.value)}
                 onBlur={() => handleBlur("email")}
                 className={`block w-full pl-10 pr-3 py-3 border rounded-xl focus:ring-2 bg-slate-50 text-slate-900 placeholder-slate-400 transition-colors ${
-                  touched.email && (!email || !isEmailValid) ? "border-red-500 focus:ring-red-500" : "border-slate-200 focus:ring-teal-500 focus:border-teal-500"
+                  touched.email && (!email || !isEmailValid) ? "border-red-500 focus:ring-red-500" : "border-slate-200 focus:ring-[#3F62C7] focus:border-[#3F62C7]"
                 }`}
                 placeholder="you@example.com"
               />
@@ -87,7 +86,7 @@ export default function Login() {
                 onChange={(e) => setPassword(e.target.value)}
                 onBlur={() => handleBlur("password")}
                 className={`block w-full pl-10 pr-10 py-3 border rounded-xl focus:ring-2 bg-slate-50 text-slate-900 placeholder-slate-400 transition-colors ${
-                  touched.password && !password ? "border-red-500 focus:ring-red-500" : "border-slate-200 focus:ring-teal-500 focus:border-teal-500"
+                  touched.password && !password ? "border-red-500 focus:ring-red-500" : "border-slate-200 focus:ring-[#3F62C7] focus:border-[#3F62C7]"
                 }`}
                 placeholder="••••••••"
               />
@@ -112,7 +111,7 @@ export default function Login() {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl shadow-sm text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition-colors disabled:opacity-70"
+            className="w-full flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl shadow-sm text-sm font-semibold text-white bg-[#3F62C7] hover:bg-[#3F62C7] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#3F62C7] transition-colors disabled:opacity-70"
           >
             {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Sign In"}
           </button>
@@ -122,7 +121,7 @@ export default function Login() {
           Don&apos;t have an account?{" "}
           <Link
             href="/register"
-            className="font-semibold text-teal-600 hover:text-teal-500"
+            className="font-semibold text-[#3F62C7] hover:text-[#3F62C7]"
           >
             Create one now
           </Link>

@@ -17,6 +17,18 @@ export const videoService = {
     });
   },
 
+  uploadVideo: (name: string, file: File): Promise<any> => {
+    const formData = new FormData();
+    formData.append("name", name);
+    formData.append("file", file);
+
+    // Passed via apiClient without "content-type" defaults because of FormData instance check!
+    return apiClient("/videos/upload", {
+      method: "POST",
+      body: formData,
+    });
+  },
+
   updateVideo: (id: string, data: Partial<StorageVideo>): Promise<StorageVideo> => {
     return apiClient(`/videos/${id}`, {
       method: "PUT",

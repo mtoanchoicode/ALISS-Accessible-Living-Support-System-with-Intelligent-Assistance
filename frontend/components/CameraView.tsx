@@ -5,25 +5,26 @@ import Webcam from 'react-webcam';
 import { DetectedObject } from '@/types/detection';
 import DetectionCanvas from './DetectionCanvas';
 import { Loader2, CameraOff } from 'lucide-react';
-import { useYoloDetection } from '@/hooks/useYoloDetection';
 
 interface CameraViewProps {
+  webcamRef: React.RefObject<Webcam | null>;
+  isModelLoaded: boolean;
+  objects: DetectedObject[];
+  videoDimensions: { width: number; height: number; };
+  error: string | null;
+  handleUserMedia: () => void;
+  handleUserMediaError: (err: string | DOMException) => void;
   onObjectSelect: (obj: DetectedObject, videoElement: HTMLVideoElement) => void;
   selectedObjectId?: string | null;
   isActive: boolean;
   facingMode: "environment" | "user";
 }
 
-export default function CameraView({ onObjectSelect, selectedObjectId, isActive, facingMode }: CameraViewProps) {
-  const {
-    webcamRef,
-    isModelLoaded,
-    objects,
-    videoDimensions,
-    error,
-    handleUserMedia,
-    handleUserMediaError,
-  } = useYoloDetection(isActive);
+export default function CameraView({ 
+  webcamRef, isModelLoaded, objects, videoDimensions, error, 
+  handleUserMedia, handleUserMediaError, 
+  onObjectSelect, selectedObjectId, isActive, facingMode 
+}: CameraViewProps) {
 
   if (error) {
     return (
@@ -49,10 +50,7 @@ export default function CameraView({ onObjectSelect, selectedObjectId, isActive,
         </div>
       )}
       
-      {/* Centered container that respects aspect ratio dynamically */}
-      <div 
-        className="relative flex items-center justify-center w-full h-full" 
-      >
+      <div className="relative flex items-center justify-center w-full h-full">
         <Webcam
           ref={webcamRef}
           audio={false}

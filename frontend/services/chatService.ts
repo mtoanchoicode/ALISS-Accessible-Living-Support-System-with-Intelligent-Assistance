@@ -2,7 +2,15 @@
 import { apiClient } from "./apiClient";
 
 export const chatService = {
-  chat: async (sessionId: string, message: string, k: number = 5, withTts: boolean = false, ttsVoice?: string) => {
+  getSessions: async () => {
+    return apiClient(`/chats`, { method: "GET" });
+  },
+
+  getSessionMessages: async (sessionId: string) => {
+    return apiClient(`/chats/${sessionId}/messages`, { method: "GET" });
+  },
+
+  chat: async (sessionId: string | null, message: string, k: number = 5, withTts: boolean = false, ttsVoice?: string) => {
     return apiClient("/chat", {
       method: "POST",
       body: JSON.stringify({

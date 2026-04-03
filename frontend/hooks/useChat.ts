@@ -1,10 +1,13 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { chatService } from '@/services/chatService';
 
 export type Message = {
   id: string;
   text: string;
   sender: 'user' | 'ai';
   time: string;
+  audio_base64?: string;
+  audio_mime?: string;
 };
 
 export type ChatSession = {
@@ -18,121 +21,138 @@ export type ChatSession = {
 export function useChat() {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [currentMessages, setCurrentMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
+  const [isSending, setIsSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const savedSessions = localStorage.getItem('memory_map_chats');
-    if (savedSessions) {
-      try {
-        const parsed = JSON.parse(savedSessions);
-        setTimeout(() => setSessions(parsed), 0);
-      } catch (e) {
-        console.error('Error loading chats', e);
-      }
+  const fetchSessions = useCallback(async () => {
+    try {
+      const data = await chatService.getSessions();
+      const mapped = (data || []).map((s: any) => ({
+        id: s.id,
+        title: s.title,
+        lastMessage: "Click to view conversation", 
+        timestamp: new Date(s.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        messages: []
+      }));
+      setSessions(mapped);
+    } catch (e) {
+      console.error(e);
     }
   }, []);
 
-  const saveSessions = (updatedSessions: ChatSession[]) => {
-    setSessions(updatedSessions);
-    localStorage.setItem('memory_map_chats', JSON.stringify(updatedSessions));
-  };
+  useEffect(() => {
+    fetchSessions();
+  }, [fetchSessions]);
+
+  useEffect(() => {
+    const loadMessages = async () => {
+      if (!currentSessionId) {
+        setCurrentMessages([]);
+        return;
+      }
+      try {
+        const msgs = await chatService.getSessionMessages(currentSessionId);
+        const mapped = (msgs || []).map((m: any) => ({
+          id: m.id,
+          text: m.text,
+          sender: m.sender,
+          time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }));
+        setCurrentMessages(mapped);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    loadMessages();
+  }, [currentSessionId]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   useEffect(() => {
-    if (currentSessionId) {
-      scrollToBottom();
+    if (currentSessionId || currentMessages.length > 0) {
+      setTimeout(scrollToBottom, 50);
     }
-  }, [currentSessionId, sessions]);
+  }, [currentMessages, currentSessionId]);
 
   const createNewChat = () => {
-    const newSession: ChatSession = {
-      id: Date.now().toString(),
-      title: 'New Conversation',
-      lastMessage: 'Started just now',
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      messages: [
-        {
-          id: '1',
-          text: 'Hello! I am your Memory Assistant. How can I help you find something today?',
-          sender: 'ai',
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        },
-      ],
-    };
-    const updated = [newSession, ...sessions];
-    saveSessions(updated);
-    setCurrentSessionId(newSession.id);
+    setCurrentSessionId(null);
+    setCurrentMessages([{
+      id: 'greeting',
+      text: 'Hello! I am ALISS. How can I help you find something today?',
+      sender: 'ai',
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    }]);
   };
 
   const deleteSession = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    const updated = sessions.filter(s => s.id !== id);
-    saveSessions(updated);
+    // In later iterations, bind this to `DELETE /chats/{id}`
+    setSessions(prev => prev.filter(s => s.id !== id));
     if (currentSessionId === id) setCurrentSessionId(null);
   };
 
-  const handleSend = (e?: React.FormEvent) => {
+  const handleSend = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!input.trim() || !currentSessionId) return;
+    if (!input.trim() || isSending) return;
 
-    const session = sessions.find(s => s.id === currentSessionId);
-    if (!session) return;
-
-    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const newUserMsg: Message = {
-      id: Date.now().toString(),
-      text: input,
-      sender: 'user',
-      time,
-    };
-
-    const updatedMessages = [...session.messages, newUserMsg];
-    const updatedSession = {
-      ...session,
-      messages: updatedMessages,
-      lastMessage: input,
-      title: session.messages.length === 1 ? input.slice(0, 30) + (input.length > 30 ? '...' : '') : session.title
-    };
-
-    const updatedSessions = sessions.map(s => s.id === currentSessionId ? updatedSession : s);
-    saveSessions(updatedSessions);
+    setIsSending(true);
+    const userText = input;
     setInput('');
 
-    setTimeout(() => {
+    const newUserMsg: Message = {
+      id: Date.now().toString(),
+      text: userText,
+      sender: 'user',
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+    setCurrentMessages(prev => [...prev, newUserMsg]);
+
+    try {
+      const response = await chatService.chat(currentSessionId, userText, 5, true); 
+
+      if (!currentSessionId && response.session_id) {
+         setCurrentSessionId(response.session_id);
+         fetchSessions(); // Background pull sidebars 
+      }
+      
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
-        text: `I've analyzed your recent scans. Based on your history, that item was last seen in the Living Room near the shelf.`,
+        text: response.answer,
         sender: 'ai',
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        audio_base64: response.audio_base64,
+        audio_mime: response.audio_mime
       };
-      
-      const sessionWithAi = {
-        ...updatedSession,
-        messages: [...updatedMessages, aiResponse],
-        lastMessage: aiResponse.text
-      };
-      
-      const finalSessions = sessions.map(s => s.id === currentSessionId ? sessionWithAi : s);
-      saveSessions(finalSessions);
-    }, 1500);
-  };
 
-  const currentSession = sessions.find(s => s.id === currentSessionId);
+      setCurrentMessages(prev => [...prev, aiResponse]);
+    } catch (err) {
+      console.error(err);
+      setCurrentMessages(prev => [...prev, {
+        id: (Date.now() + 1).toString(),
+        text: "Sorry, I am having trouble connecting to my models.",
+        sender: 'ai',
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      }]);
+    } finally {
+      setIsSending(false);
+    }
+  };
 
   return {
     sessions,
     currentSessionId,
     setCurrentSessionId,
-    currentSession,
+    currentSession: { title: sessions.find(s => s.id === currentSessionId)?.title, messages: currentMessages },
     input,
     setInput,
     messagesEndRef,
     createNewChat,
     deleteSession,
     handleSend,
+    isSending
   };
 }
