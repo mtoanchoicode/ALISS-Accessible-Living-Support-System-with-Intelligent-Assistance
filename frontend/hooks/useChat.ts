@@ -52,6 +52,9 @@ export function useChat() {
         setCurrentMessages([]);
         return;
       }
+      if (currentSessionId === 'new') {
+        return;
+      }
       try {
         const msgs = await chatService.getSessionMessages(currentSessionId);
         const mapped = (msgs || []).map((m: any) => ({
@@ -79,7 +82,7 @@ export function useChat() {
   }, [currentMessages, currentSessionId]);
 
   const createNewChat = () => {
-    setCurrentSessionId(null);
+    setCurrentSessionId('new');
     setCurrentMessages([{
       id: 'greeting',
       text: 'Hello! I am ALISS. How can I help you find something today?',
@@ -112,9 +115,10 @@ export function useChat() {
     setCurrentMessages(prev => [...prev, newUserMsg]);
 
     try {
-      const response = await chatService.chat(currentSessionId, userText, 5, true); 
+      const passedSessionId = currentSessionId === 'new' ? null : currentSessionId;
+      const response = await chatService.chat(passedSessionId, userText, 5, true); 
 
-      if (!currentSessionId && response.session_id) {
+      if ((!currentSessionId || currentSessionId === 'new') && response.session_id) {
          setCurrentSessionId(response.session_id);
          fetchSessions(); // Background pull sidebars 
       }
@@ -146,7 +150,10 @@ export function useChat() {
     sessions,
     currentSessionId,
     setCurrentSessionId,
-    currentSession: { title: sessions.find(s => s.id === currentSessionId)?.title, messages: currentMessages },
+    currentSession: { 
+      title: currentSessionId === 'new' ? 'New Chat' : sessions.find(s => s.id === currentSessionId)?.title, 
+      messages: currentMessages 
+    },
     input,
     setInput,
     messagesEndRef,

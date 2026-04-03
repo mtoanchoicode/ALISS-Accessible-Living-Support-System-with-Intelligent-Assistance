@@ -2,13 +2,14 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { User } from "lucide-react";
-import { useAuth } from "@/hooks/useAuth";
+// import { useAuth } from "@/hooks/useAuth"; // Not currently used, can comment out
 import { useUserProfile } from "@/hooks/useUserProfile";
+import Image from "next/image";
 
 export default function Header() {
   const pathname = usePathname();
   const router = useRouter();
-  
+
   const { profile, initials, isLoading } = useUserProfile();
 
   if (
@@ -45,20 +46,24 @@ export default function Header() {
       <h1 className="text-xl font-semibold text-slate-800 tracking-tight">
         {getTitle()}
       </h1>
-      
+
       {pathname === "/home" && (
         <button
           onClick={() => router.push("/profile")}
-          className="w-10 h-10 bg-[#dbeafe] rounded-full flex items-center justify-center text-[#3F62C7] hover:bg-[#bfdbfe] transition-colors overflow-hidden border border-blue-200 shadow-sm"
+          // ADDED 'overflow-hidden' AND 'relative' TO ensure rounding
+          className="relative w-10 h-10 bg-[#dbeafe] rounded-full flex items-center justify-center text-[#3F62C7] hover:bg-[#bfdbfe] transition-colors overflow-hidden border border-blue-200 shadow-sm"
         >
           {/* 2. The Fallback Avatar Logic */}
           {isLoading ? (
-            <div className="w-full h-full animate-pulse bg-blue-200" />
+            <div className="w-full h-full animate-pulse bg-blue-200 rounded-full" />
           ) : profile?.image_uri ? (
-            <img 
-              src={profile.image_uri} 
-              alt={`${profile.first_name}'s avatar`} 
-              className="w-full h-full object-cover"
+            <Image
+              src={profile.image_uri}
+              alt={`${profile?.first_name || 'User'}'s avatar`}
+              fill
+              sizes="40px" // Recommended for performance with 'fill' on small images
+              className="object-cover rounded-full" // Added 'rounded-full' here too for safety
+              onLoadingComplete={(img) => img.classList.remove("opacity-0")}
             />
           ) : initials ? (
             <span className="font-bold text-sm">{initials}</span>

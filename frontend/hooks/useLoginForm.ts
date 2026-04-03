@@ -75,8 +75,6 @@ export function useLoginForm() {
     }
   };
 
-  
-
   const toggleShowPassword = () => setShowPassword(!showPassword);
 
   return {

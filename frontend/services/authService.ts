@@ -17,7 +17,7 @@ export const authService = {
   },
   
   saveToken: (token: string, userId?: string) => {
-    const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+    const expiresAt = Date.now() + 24 * 60 * 60 * 1000;
     localStorage.setItem("aliss_token", token);
     localStorage.setItem("aliss_token_expires", expiresAt.toString());
     if (userId) {
