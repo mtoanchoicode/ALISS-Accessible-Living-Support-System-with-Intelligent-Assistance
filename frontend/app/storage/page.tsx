@@ -8,7 +8,8 @@ import {
   Video,
   Package,
   Pencil,
-  Plus
+  Plus,
+  Loader2
 } from "lucide-react";
 import StorageSkeleton from "@/components/StorageSkeleton";
 import { useStorage } from "@/hooks/useStorage";
@@ -87,7 +88,11 @@ export default function StoragePage() {
                   />
                 ) : item.type === "video" ? (
                   <div className="bg-blue-50 w-full h-full flex items-center justify-center">
-                    <Video className="w-6 h-6 text-blue-500" />
+                    {item.video_uri === "processing" ? (
+                      <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
+                    ) : (
+                      <Video className="w-6 h-6 text-blue-500" />
+                    )}
                   </div>
                 ) : (
                   <Package className="w-6 h-6 text-slate-400" />
