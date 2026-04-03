@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+streamlit
+requests
+opencv-python
+ultralytics
