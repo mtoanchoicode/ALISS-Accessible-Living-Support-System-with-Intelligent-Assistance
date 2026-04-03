@@ -19,10 +19,10 @@ export default function HomePage() {
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <div className="bg-teal-600 rounded-3xl p-5 text-white shadow-sm shadow-teal-600/20">
+        <div className="bg-[#3F62C7] rounded-3xl p-5 text-white shadow-sm shadow-[#3F62C7]/20">
           <Map className="w-8 h-8 mb-4 opacity-80" />
           <h3 className="text-3xl font-bold mb-1">4</h3>
-          <p className="text-teal-100 text-sm font-medium">Rooms Mapped</p>
+          <p className="text-[#dbeafe] text-sm font-medium">Rooms Mapped</p>
         </div>
         <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm">
           <Search className="w-8 h-8 mb-4 text-amber-500" />

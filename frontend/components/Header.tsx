@@ -7,7 +7,7 @@ export default function Header() {
   const pathname = usePathname();
   const router = useRouter();
 
-  if (pathname === "/" || pathname === "/register" || pathname === "/camera") {
+  if (pathname === "/" || pathname === "/register" || pathname === "/camera" || pathname === "/profile" || pathname === "/edit") {
     return null;
   }
 
@@ -38,7 +38,7 @@ export default function Header() {
       {pathname === "/home" && (
         <button
           onClick={() => router.push("/profile")}
-          className="w-10 h-10 bg-teal-100 rounded-full flex items-center justify-center text-teal-700 hover:bg-teal-200 transition-colors"
+          className="w-10 h-10 bg-[#dbeafe] rounded-full flex items-center justify-center text-[#3F62C7] hover:bg-[#bfdbfe] transition-colors"
         >
           <User className="w-6 h-6" />
         </button>

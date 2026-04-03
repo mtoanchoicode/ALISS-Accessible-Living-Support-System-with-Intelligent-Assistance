@@ -1,30 +1,105 @@
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { userService } from "@/services/userService";
+import { authService } from "@/services/authService";
 import { UserProfile } from "@/types";
 
 export function useUserProfile() {
+  const router = useRouter();
+  
+  // 1. Data States
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // 2. Edit States
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  
+  // 3. Auth States
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
+  // --- Initializers ---
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const userId = localStorage.getItem("aliss_user_id");
-        if (!userId) {
-          setIsLoading(false);
-          return;
-        }
-        const data = await userService.getUserProfile(userId);
+        const data = await userService.getUserProfile();
         setProfile(data);
+        
+        // Sync local edit states automatically
+        setFirstName(data.first_name || "");
+        setLastName(data.last_name || "");
+        if (data.image_uri) setAvatarPreview(data.image_uri);
       } catch (error) {
         console.error("Failed to load user profile:", error);
       } finally {
         setIsLoading(false);
       }
     };
-
     fetchProfile();
   }, []);
 
-  return { profile, isLoading };
+  const getInitials = (first?: string, last?: string) => {
+    if (!first && !last) return "";
+    return ((first?.charAt(0) || "") + (last?.charAt(0) || "")).toUpperCase();
+  };
+  const initials = getInitials(profile?.first_name, profile?.last_name);
+
+  // --- Edit Actions ---
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      setAvatarPreview(URL.createObjectURL(file));
+    }
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setIsSaving(true);
+      const updatedData = await userService.updateUserProfile({ 
+        first_name: firstName, 
+        last_name: lastName 
+      });
+      setProfile(updatedData);
+      
+      if (selectedFile) {
+        console.log("Image upload to be implemented");
+      }
+      
+      router.push("/profile");
+    } catch (error) {
+      console.error("Failed to update profile", error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // --- Auth Actions ---
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await authService.logoutApi(); 
+      authService.logout(); 
+      router.push("/"); 
+    } catch (error) {
+      console.error("Failed to log out:", error);
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
+
+  return { 
+    profile, initials, isLoading, 
+    // Auth mapping
+    isLoggingOut, handleLogout,
+    // Edit mapping
+    firstName, setFirstName,
+    lastName, setLastName,
+    avatarPreview,
+    isSaving, handleImageChange, handleSave 
+  };
 }

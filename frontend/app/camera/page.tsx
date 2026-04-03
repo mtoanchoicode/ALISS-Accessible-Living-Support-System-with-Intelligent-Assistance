@@ -5,24 +5,17 @@ import { motion } from "motion/react";
 import { StopCircle, RefreshCw, Maximize2, Settings2 } from "lucide-react";
 import CameraView from "../../components/CameraView";
 import ItemModal from "@/components/ItemModal";
-import { useCameraControls } from "@/hooks/useCameraControls";
+import { useCamera } from "@/hooks/useCamera";
 
 export default function RecordPage() {
   const {
-    isRecording,
-    recordingTime,
-    selectedObject,
-    snapshotUrl,
-    isCameraActive,
-    facingMode,
-    toggleRecording,
-    handleObjectSelect,
-    handleSaveItem,
-    handleCloseModal,
+    isRecording, recordingTime, toggleRecording,
+    facingMode, toggleFacingMode,
+    isCameraActive, toggleCameraActive,
     toggleFullScreen,
-    toggleFacingMode,
-    toggleCameraActive,
-  } = useCameraControls();
+    selectedObject, snapshotUrl, handleObjectSelect, handleSaveItem, handleCloseModal,
+    webcamRef, isModelLoaded, objects, videoDimensions, error, handleUserMedia, handleUserMediaError
+  } = useCamera();
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60).toString().padStart(2, "0");
@@ -31,10 +24,17 @@ export default function RecordPage() {
   };
 
   return (
-    // Changed to h-[100dvh] for mobile browser safe areas
     <div className="flex-1 flex-col h-[100dvh] w-full relative overflow-hidden bg-black">
       <div className="relative flex-1 bg-black overflow-hidden h-full">
+        {/* Pass down the monolithic context explicitly to the abstracted View Module */}
         <CameraView
+          webcamRef={webcamRef}
+          isModelLoaded={isModelLoaded}
+          objects={objects}
+          videoDimensions={videoDimensions}
+          error={error}
+          handleUserMedia={handleUserMedia}
+          handleUserMediaError={handleUserMediaError}
           onObjectSelect={handleObjectSelect}
           selectedObjectId={selectedObject?.id}
           isActive={isCameraActive}
@@ -76,7 +76,6 @@ export default function RecordPage() {
           </button>
         </div>
 
-        {/* Adjusted bottom spacing for mobile (pb-10) and larger touch targets */}
         <div className="absolute bottom-10 left-0 right-0 flex justify-center items-center space-x-8 pointer-events-none z-20">
           <button 
             onClick={toggleFacingMode}

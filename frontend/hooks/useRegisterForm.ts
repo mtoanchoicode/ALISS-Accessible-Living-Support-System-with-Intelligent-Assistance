@@ -6,7 +6,7 @@ import {
   validateVietnamesePhone, 
   checkPasswordCriteria, 
   formatPhoneForBackend 
-} from "@/utils/validation";
+} from "@/lib/validation";
 
 export function useRegisterForm() {
   const router = useRouter();
@@ -55,29 +55,43 @@ export function useRegisterForm() {
     setErrorMsg("");
     setSuccessMsg("");
 
-    try {
-      const fullPhone = formatPhoneForBackend(formData.phone);
+  try {
+    const fullPhone = formatPhoneForBackend(formData.phone);
 
-      const response = await authService.register({
+    // 1. Define the timeout promise
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("TIMEOUT")), 5000)
+    );
+
+    // 2. Race the registration call against the 5s timer
+    const response = (await Promise.race([
+      authService.register({
         first_name: formData.firstName,
         last_name: formData.lastName,
-        phone: fullPhone, 
+        phone: fullPhone,
         email: formData.email,
         password: formData.password,
-      });
+      }),
+      timeoutPromise,
+    ])) as any;
 
-      if (response.data.status === "error") {
-        setErrorMsg(response.data.message || "Registration failed. Please try again.");
-      } else {
-        setSuccessMsg("Account created! Redirecting to login...");
-        setTimeout(() => router.push("/"), 2000);
-      }
-    } catch (error: any) {
-      setErrorMsg(error.message);
-    } finally {
-      setIsLoading(false);
+    if (response.data.status === "error") {
+      setErrorMsg(response.data.message || "Registration failed. Please try again.");
+    } else {
+      setSuccessMsg("Account created! Redirecting to login...");
+      setTimeout(() => router.push("/home"), 2000);
     }
-  };
+  } catch (error: any) {
+    // 3. Handle timeout vs server errors
+    if (error.message === "TIMEOUT") {
+      setErrorMsg("The server is taking too long to respond. Please try again.");
+    } else {
+      setErrorMsg(error.message || "An unexpected error occurred.");
+    }
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const toggleShowPassword = () => setShowPassword(!showPassword);
 

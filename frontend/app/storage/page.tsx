@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "motion/react";
 import {
   Database,
@@ -10,7 +11,9 @@ import {
   Plus
 } from "lucide-react";
 import StorageSkeleton from "@/components/StorageSkeleton";
-import { useStorageSearch } from "@/hooks/useStorageSearch";
+import { useStorage } from "@/hooks/useStorage";
+import { EditItemModal } from "./components/EditItemModal";
+import { UploadVideoModal } from "./components/UploadVideoModal";
 
 export default function StoragePage() {
   const {
@@ -20,9 +23,17 @@ export default function StoragePage() {
     setSearchQuery,
     filteredItems,
     isLoading,
-    handleEdit,
-    handleAddNew,
-  } = useStorageSearch();
+    refetch,
+    // Actions mapped from hook
+    editingItem,
+    setEditingItem,
+    isUploadingVideo,
+    setIsUploadingVideo,
+    handleEditClick,
+    handleAddNewClick,
+    handleSaveEdit,
+    handleUploadVideo
+  } = useStorage(false);
 
   return (
     <div className="p-4 space-y-6 pb-24">
@@ -34,7 +45,7 @@ export default function StoragePage() {
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search items or locations..."
-          className="w-full bg-white border border-slate-100 rounded-2xl pl-12 pr-4 py-3.5 text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all"
+          className="w-full bg-white border border-slate-100 rounded-2xl pl-12 pr-4 py-3.5 text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#3F62C7]/20 focus:border-[#3F62C7] transition-all"
         />
       </div>
 
@@ -46,7 +57,7 @@ export default function StoragePage() {
             onClick={() => setActiveTab(tab)}
             className={`flex-1 py-2.5 rounded-xl text-sm font-bold capitalize transition-all ${
               activeTab === tab
-                ? "bg-white text-teal-600 shadow-sm"
+                ? "bg-white text-[#3F62C7] shadow-sm"
                 : "text-slate-500 hover:text-slate-700"
             }`}
           >
@@ -91,8 +102,8 @@ export default function StoragePage() {
               </div>
 
               <button 
-                onClick={() => handleEdit(item.id, item.type || (activeTab === 'items' ? 'item' : 'video'))}
-                className="p-2 text-slate-400 hover:text-teal-600 bg-slate-50 hover:bg-teal-50 rounded-full transition-colors shrink-0 outline-none"
+                onClick={() => handleEditClick(item.id, item.type || (activeTab === 'items' ? 'item' : 'video'), item.name)}
+                className="p-2 text-slate-400 hover:text-[#3F62C7] bg-slate-50 hover:bg-[#eff6ff] rounded-full transition-colors shrink-0 outline-none"
               >
                 <Pencil className="w-4 h-4" />
               </button>
@@ -111,13 +122,32 @@ export default function StoragePage() {
       </div>
 
       {/* Floating Action Button */}
-      <button 
-        onClick={handleAddNew}
-        className="fixed bottom-24 right-4 bg-teal-600 text-white p-4 rounded-full shadow-lg shadow-teal-600/30 hover:bg-teal-700 hover:scale-105 active:scale-95 transition-all z-50 flex items-center justify-center"
-        aria-label={activeTab === 'items' ? "Add new item" : "Upload video"}
-      >
-        <Plus className="w-6 h-6" />
-      </button>
+      {activeTab === "videos" && (
+        <button 
+          onClick={handleAddNewClick}
+          className="fixed bottom-24 right-4 bg-[#3F62C7] text-white p-4 rounded-full shadow-lg shadow-[#3F62C7]/30 hover:bg-[#3F62C7] hover:scale-105 active:scale-95 transition-all z-50 flex items-center justify-center"
+          aria-label="Upload video"
+        >
+          <Plus className="w-6 h-6" />
+        </button>
+      )}
+
+      {/* Modals */}
+      {editingItem && (
+        <EditItemModal
+          isOpen={!!editingItem}
+          onClose={() => setEditingItem(null)}
+          initialName={editingItem.name}
+          type={editingItem.type}
+          onSave={handleSaveEdit}
+        />
+      )}
+
+      <UploadVideoModal
+        isOpen={isUploadingVideo}
+        onClose={() => setIsUploadingVideo(false)}
+        onUpload={handleUploadVideo}
+      />
     </div>
   );
 }

@@ -1,9 +1,12 @@
 import { useState } from "react";
-import { useLogin } from "@/hooks/useLogin";
-import { validateEmail } from "@/utils/validation";
+import { validateEmail } from "@/lib/validation";
+import { useRouter } from "next/navigation";
+import { authService } from "@/services/authService";
 
 export function useLoginForm() {
-  const { executeLogin, isLoading, errorMsg } = useLogin();
+  const router = useRouter();
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
   
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
@@ -20,7 +23,7 @@ export function useLoginForm() {
     setTouched((prev) => ({ ...prev, [field]: true }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setTouched({ email: true, password: true });
 
@@ -28,8 +31,51 @@ export function useLoginForm() {
       return; 
     }
 
-    executeLogin(email, password);
+    const cleanEmail = email.trim();
+
+    if (!cleanEmail || !validateEmail(cleanEmail)) {
+      setErrorMsg("Please enter a valid email address.");
+      return;
+    }
+
+    if (!password) {
+      setErrorMsg("Please enter your password.");
+      return;
+    }
+
+    setIsLoading(true);
+    setErrorMsg("");
+
+    try {
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("TIMEOUT")), 5000)
+      );
+
+      const response = (await Promise.race([
+        authService.login(cleanEmail, password),
+        timeoutPromise,
+      ])) as any;
+
+      if (response.access_token) {
+        authService.saveToken(response.access_token, response.user_id);
+        
+        setTimeout(() => router.push("/home"), 2000);
+      } else {
+        setErrorMsg("Invalid email or password. Please try again.");
+      }
+    } catch (error: any) {
+      
+      if (error.message === "TIMEOUT") {
+        setErrorMsg("Request timed out. Please check your connection.");
+      } else {
+        setErrorMsg("Invalid email or password. Please try again.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
+
+  
 
   const toggleShowPassword = () => setShowPassword(!showPassword);
 

@@ -9,3 +9,19 @@
     padding-top: env(safe-area-inset-top);
   }
 }
+
+@layer base {
+  :root {
+    /* Brand Palette */
+    --color-blueberry: #3F62C7;
+    --color-caramel: #CC8957;
+    --color-brownie: #66452C;
+    --color-creamy: #F6E8D6;
+
+    /* Semantic Aliases (Optional but recommended) */
+    --color-primary: #3F62C7;
+    --color-secondary: var(--color-caramel);
+    --color-surface: var(--color-creamy);
+    --color-text-main: var(--color-brownie);
+  }
+}
