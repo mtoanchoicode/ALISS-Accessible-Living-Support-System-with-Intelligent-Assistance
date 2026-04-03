@@ -1,82 +1,132 @@
 "use client";
 
-import { motion } from "motion/react";
-import { Search, Map, Clock, Bell, ArrowRight, ShieldCheck } from "lucide-react";
 import Link from "next/link";
+import { Eye, EyeOff, Lock, Mail, Loader2 } from "lucide-react";
+import { motion } from "motion/react";
+import { useLoginForm } from "@/hooks/useLoginForm";
 
-export default function HomePage() {
+export default function Login() {
+  const {
+    email,
+    setEmail,
+    password,
+    setPassword,
+    showPassword,
+    toggleShowPassword,
+    touched,
+    handleBlur,
+    handleSubmit,
+    isEmailValid,
+    isLoading,
+    errorMsg,
+  } = useLoginForm();
+
   return (
-    <div className="p-4 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-900">Good morning,</h2>
-          <p className="text-slate-500">Jane Doe</p>
+    <div className="flex-1 flex flex-col justify-center px-6 py-12 bg-white">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+      >
+        <div className="mb-10 text-center">
+          <h2 className="text-3xl font-bold text-slate-900 tracking-tight">
+            Welcome back
+          </h2>
+          <p className="mt-2 text-slate-500">Sign in to ALISS</p>
         </div>
-      </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="bg-teal-600 rounded-3xl p-5 text-white shadow-sm shadow-teal-600/20">
-          <Map className="w-8 h-8 mb-4 opacity-80" />
-          <h3 className="text-3xl font-bold mb-1">4</h3>
-          <p className="text-teal-100 text-sm font-medium">Rooms Mapped</p>
-        </div>
-        <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm">
-          <Search className="w-8 h-8 mb-4 text-amber-500" />
-          <h3 className="text-3xl font-bold text-slate-900 mb-1">12</h3>
-          <p className="text-slate-500 text-sm font-medium">Objects Tracked</p>
-        </div>
-      </div>
+        <form onSubmit={handleSubmit} className="space-y-6 max-w-sm mx-auto">
+          {errorMsg && (
+            <div className="p-3 bg-red-50 text-red-600 text-sm rounded-xl border border-red-100 text-center">
+              {errorMsg}
+            </div>
+          )}
 
-      <div className="space-y-3">
-        <h3 className="font-semibold text-slate-800 px-1">Quick Actions</h3>
-        <Link href="/chat" className="flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:bg-slate-50 transition-colors">
-          <div className="flex items-center space-x-4">
-            <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center text-blue-600">
-              <Search className="w-6 h-6" />
-            </div>
-            <div>
-              <h4 className="font-semibold text-slate-900">Find an Object</h4>
-              <p className="text-xs text-slate-500">Ask the AI assistant</p>
-            </div>
-          </div>
-          <ArrowRight className="w-5 h-5 text-slate-400" />
-        </Link>
-        
-        <Link href="/scanner" className="flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:bg-slate-50 transition-colors">
-          <div className="flex items-center space-x-4">
-            <div className="w-12 h-12 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-600">
-              <Map className="w-6 h-6" />
-            </div>
-            <div>
-              <h4 className="font-semibold text-slate-900">Scan New Area</h4>
-              <p className="text-xs text-slate-500">Update home context</p>
-            </div>
-          </div>
-          <ArrowRight className="w-5 h-5 text-slate-400" />
-        </Link>
-      </div>
-
-      <div className="space-y-3">
-        <h3 className="font-semibold text-slate-800 px-1">Recent Activity</h3>
-        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-          {[
-            { title: 'Keys located', desc: 'Living Room table', time: '10 mins ago', icon: ShieldCheck, color: 'text-emerald-500', bg: 'bg-emerald-50' },
-            { title: 'New scan added', desc: 'Kitchen area', time: '2 hours ago', icon: Clock, color: 'text-blue-500', bg: 'bg-blue-50' },
-            { title: 'Glasses moved', desc: 'From Bedroom to Living Room', time: 'Yesterday', icon: Bell, color: 'text-amber-500', bg: 'bg-amber-50' },
-          ].map((item, i) => (
-            <div key={i} className={`flex items-start p-4 ${i !== 2 ? 'border-b border-slate-50' : ''}`}>
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${item.bg} ${item.color} mr-4`}>
-                <item.icon className="w-5 h-5" />
+          {/* Email Field */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Email <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Mail className="h-5 w-5 text-slate-400" />
               </div>
-              <div className="flex-1 min-w-0">
-                <h4 className="font-medium text-slate-900 text-sm">{item.title}</h4>
-                <p className="text-xs text-slate-500 truncate">{item.desc}</p>
-              </div>
-              <span className="text-[10px] text-slate-400 whitespace-nowrap ml-2">{item.time}</span>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                onBlur={() => handleBlur("email")}
+                className={`block w-full pl-10 pr-3 py-3 border rounded-xl focus:ring-2 bg-slate-50 text-slate-900 placeholder-slate-400 transition-colors ${
+                  touched.email && (!email || !isEmailValid) ? "border-red-500 focus:ring-red-500" : "border-slate-200 focus:ring-[#3F62C7] focus:border-[#3F62C7]"
+                }`}
+                placeholder="you@example.com"
+              />
             </div>
-          ))}
-        </div>
-      </div>
+            {/* Inline validation feedback */}
+            {touched.email && !email && (
+              <p className="text-red-500 text-xs mt-1">Email is required</p>
+            )}
+            {touched.email && email && !isEmailValid && (
+              <p className="text-red-500 text-xs mt-1">Enter a valid email address</p>
+            )}
+          </div>
+
+          {/* Password Field */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Password <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Lock className="h-5 w-5 text-slate-400" />
+              </div>
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onBlur={() => handleBlur("password")}
+                className={`block w-full pl-10 pr-10 py-3 border rounded-xl focus:ring-2 bg-slate-50 text-slate-900 placeholder-slate-400 transition-colors ${
+                  touched.password && !password ? "border-red-500 focus:ring-red-500" : "border-slate-200 focus:ring-[#3F62C7] focus:border-[#3F62C7]"
+                }`}
+                placeholder="••••••••"
+              />
+              <button
+                type="button"
+                className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                onClick={toggleShowPassword}
+              >
+                {showPassword ? (
+                  <EyeOff className="h-5 w-5 text-slate-400 hover:text-slate-600" />
+                ) : (
+                  <Eye className="h-5 w-5 text-slate-400 hover:text-slate-600" />
+                )}
+              </button>
+            </div>
+            {/* Inline validation feedback */}
+            {touched.password && !password && (
+              <p className="text-red-500 text-xs mt-1">Password is required</p>
+            )}
+          </div>
+
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl shadow-sm text-sm font-semibold text-white bg-[#3F62C7] hover:bg-[#3F62C7] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#3F62C7] transition-colors disabled:opacity-70"
+          >
+            {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Sign In"}
+          </button>
+        </form>
+
+        <p className="mt-8 text-center text-sm text-slate-500">
+          Don&apos;t have an account?{" "}
+          <Link
+            href="/register"
+            className="font-semibold text-[#3F62C7] hover:text-[#3F62C7]"
+          >
+            Create one now
+          </Link>
+        </p>
+      </motion.div>
     </div>
   );
 }

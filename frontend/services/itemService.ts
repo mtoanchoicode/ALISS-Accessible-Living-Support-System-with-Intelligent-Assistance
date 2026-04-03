@@ -2,7 +2,6 @@ import { apiClient } from "./apiClient";
 import { StorageItem } from "../types";
 
 export const itemService = {
-  // Assuming you will make a GET /items route to fetch all
   getAllItems: (): Promise<StorageItem[]> => {
     return apiClient("/items");
   },
@@ -18,5 +17,16 @@ export const itemService = {
     });
   },
 
-  // ... add update and delete here
+  updateItem: (id: string, data: Partial<StorageItem>): Promise<StorageItem> => {
+    return apiClient(`/items/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteItem: (id: string): Promise<any> => {
+    return apiClient(`/items/${id}`, {
+      method: "DELETE",
+    });
+  }
 };

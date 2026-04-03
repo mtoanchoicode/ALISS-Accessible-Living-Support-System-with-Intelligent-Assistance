@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY") # Usually the anon key for client-side, or service role for backend admin tasks
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     raise RuntimeError("Supabase environment variables are missing!")
@@ -40,7 +40,7 @@ def register_user(first_name, last_name, phone, email, password):
             "first_name": first_name,
             "last_name": last_name,
             "phone": phone,
-            "email": email
+            "email": email,
         }
 
         profile_response = supabase.table("users").insert(profile_data).execute()

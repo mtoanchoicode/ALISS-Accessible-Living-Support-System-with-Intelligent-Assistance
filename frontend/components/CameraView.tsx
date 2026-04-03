@@ -1,112 +1,30 @@
 'use client';
 
-import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { loadModel, detectObjects } from '@/lib/yoloModel';
+import React from 'react';
+import Webcam from 'react-webcam';
 import { DetectedObject } from '@/types/detection';
 import DetectionCanvas from './DetectionCanvas';
 import { Loader2, CameraOff } from 'lucide-react';
 
 interface CameraViewProps {
+  webcamRef: React.RefObject<Webcam | null>;
+  isModelLoaded: boolean;
+  objects: DetectedObject[];
+  videoDimensions: { width: number; height: number; };
+  error: string | null;
+  handleUserMedia: () => void;
+  handleUserMediaError: (err: string | DOMException) => void;
   onObjectSelect: (obj: DetectedObject, videoElement: HTMLVideoElement) => void;
   selectedObjectId?: string | null;
   isActive: boolean;
+  facingMode: "environment" | "user";
 }
 
-export default function CameraView({ onObjectSelect, selectedObjectId, isActive }: CameraViewProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const requestRef = useRef<number>(0);
-  const [isModelLoaded, setIsModelLoaded] = useState(false);
-  const [objects, setObjects] = useState<DetectedObject[]>([]);
-  const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 });
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    loadModel()
-      .then(() => setIsModelLoaded(true))
-      .catch((err) => setError('Failed to load detection model.'));
-  }, []);
-
-  useEffect(() => {
-    let stream: MediaStream | null = null;
-
-    const startCamera = async () => {
-      try {
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          if (!window.isSecureContext) {
-            setError('Camera access requires a secure context (HTTPS). If you are testing locally, use localhost or set up HTTPS.');
-          } else {
-            setError('Camera API not supported in this browser.');
-          }
-          return;
-        }
-
-        const constraints = {
-          video: { 
-            facingMode: 'environment',
-            width: { ideal: 1280, max: 1920 },
-            height: { ideal: 720, max: 1080 }
-          },
-          audio: false,
-        };
-
-        stream = await navigator.mediaDevices.getUserMedia(constraints);
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          // Some mobile browsers need a manual play call
-          try {
-            await videoRef.current.play();
-          } catch (playErr) {
-            console.warn('Auto-play failed, waiting for user interaction', playErr);
-          }
-        }
-      } catch (err) {
-        console.error('Camera Error:', err);
-        if (err instanceof DOMException && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError')) {
-          setError('Camera permission denied. Please enable camera access in your browser settings.');
-        } else if (err instanceof DOMException && err.name === 'NotFoundError') {
-          setError('No camera found on this device.');
-        } else {
-          setError(`Camera error: ${err instanceof Error ? err.message : 'Unknown error'}`);
-        }
-      }
-    };
-
-    startCamera();
-
-    return () => {
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!isActive) {
-      setObjects([]);
-    }
-  }, [isActive]);
-
-  const detectFrame = useCallback(async () => {
-    if (videoRef.current && videoRef.current.readyState === 4 && isModelLoaded && isActive) {
-      const detected = await detectObjects(videoRef.current);
-      setObjects(detected);
-    }
-    requestRef.current = requestAnimationFrame(detectFrame);
-  }, [isModelLoaded, isActive]);
-
-  useEffect(() => {
-    requestRef.current = requestAnimationFrame(detectFrame);
-    return () => cancelAnimationFrame(requestRef.current);
-  }, [detectFrame]);
-
-  const handleVideoLoad = () => {
-    if (videoRef.current) {
-      setVideoDimensions({
-        width: videoRef.current.videoWidth,
-        height: videoRef.current.videoHeight,
-      });
-    }
-  };
+export default function CameraView({ 
+  webcamRef, isModelLoaded, objects, videoDimensions, error, 
+  handleUserMedia, handleUserMediaError, 
+  onObjectSelect, selectedObjectId, isActive, facingMode 
+}: CameraViewProps) {
 
   if (error) {
     return (
@@ -131,34 +49,36 @@ export default function CameraView({ onObjectSelect, selectedObjectId, isActive 
           <p className="font-medium tracking-tight">Loading AI Model...</p>
         </div>
       )}
-      <div 
-        className="relative" 
-        style={{ 
-          aspectRatio: videoDimensions.width && videoDimensions.height ? `${videoDimensions.width}/${videoDimensions.height}` : '16/9',
-          maxHeight: '100%',
-          maxWidth: '100%'
-        }}
-      >
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted
-          onLoadedMetadata={handleVideoLoad}
-          className="w-full h-full block object-contain"
+      
+      <div className="relative flex items-center justify-center w-full h-full">
+        <Webcam
+          ref={webcamRef}
+          audio={false}
+          screenshotFormat="image/jpeg"
+          videoConstraints={{
+            facingMode: facingMode,
+            width: { ideal: typeof window !== 'undefined' && window.innerWidth < 768 ? 1080 : 1920 },
+            height: { ideal: typeof window !== 'undefined' && window.innerWidth < 768 ? 1920 : 1080 }
+          }}
+          onUserMedia={handleUserMedia}
+          onLoadedMetadata={handleUserMedia}
+          onUserMediaError={handleUserMediaError}
+          className="w-full h-full object-contain"
         />
         {isModelLoaded && videoDimensions.width > 0 && (
-          <DetectionCanvas
-            objects={objects}
-            videoWidth={videoDimensions.width}
-            videoHeight={videoDimensions.height}
-            onObjectClick={(obj) => {
-              if (videoRef.current) {
-                onObjectSelect(obj, videoRef.current);
-              }
-            }}
-            selectedObjectId={selectedObjectId}
-          />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <DetectionCanvas
+              objects={objects}
+              videoWidth={videoDimensions.width}
+              videoHeight={videoDimensions.height}
+              onObjectClick={(obj) => {
+                if (webcamRef.current?.video) {
+                  onObjectSelect(obj, webcamRef.current.video);
+                }
+              }}
+              selectedObjectId={selectedObjectId}
+            />
+          </div>
         )}
       </div>
     </div>

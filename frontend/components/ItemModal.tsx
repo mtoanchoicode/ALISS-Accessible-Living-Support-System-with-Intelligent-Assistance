@@ -39,10 +39,10 @@ export default function ItemModal({ object, snapshotUrl, onClose, onSave }: Item
     <div className={`
       absolute z-50 text-zinc-100 flex flex-col transition-all duration-300
       ${isMobile 
-        ? 'bottom-0 left-0 right-0 w-full rounded-t-3xl border-t' 
+        ? 'bottom-0 left-0 right-0 w-full rounded-t-3xl border-t pb-safe' 
         : 'top-4 right-4 w-80 rounded-2xl border'}
       bg-zinc-900/95 backdrop-blur-xl border-white/10 shadow-2xl overflow-hidden
-      max-h-[90vh]
+      max-h-[90dvh]
     `}>
       <div className="flex items-center justify-between p-4 border-b border-white/10 bg-black/40">
         <h3 className="font-medium tracking-tight">Register Item</h3>
@@ -77,7 +77,8 @@ export default function ItemModal({ object, snapshotUrl, onClose, onSave }: Item
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all placeholder:text-zinc-600"
+                  // Changed text-sm to text-base (16px) to prevent iOS auto-zoom on focus
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all placeholder:text-zinc-600"
                   placeholder="E.g., My Coffee Mug"
                 />
               </div>
@@ -88,7 +89,8 @@ export default function ItemModal({ object, snapshotUrl, onClose, onSave }: Item
                   required
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all placeholder:text-zinc-600"
+                  // Changed text-sm to text-base here too
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all placeholder:text-zinc-600"
                   placeholder="E.g., Electronics, Kitchen"
                 />
               </div>
@@ -97,7 +99,8 @@ export default function ItemModal({ object, snapshotUrl, onClose, onSave }: Item
         </div>
       </div>
       
-      <div className="p-4 md:p-4 border-t border-white/10 bg-black/40">
+      {/* Added extra padding bottom (pb-8) for mobile safe areas and home bar */}
+      <div className="p-4 md:p-4 pb-8 md:pb-4 border-t border-white/10 bg-black/40">
         <button
           type="submit"
           form="register-form"

@@ -1,5 +1,6 @@
 # services/video_service.py
 import os
+import uuid
 from supabase import create_client, Client 
 from dotenv import load_dotenv
 
@@ -29,3 +30,21 @@ def update_video(video_id: str, update_data: dict):
 def create_video(video_data: dict):
     response = supabase.table("videos").insert(video_data).execute()
     return response.data
+
+def upload_video_file(file_bytes: bytes, filename: str):
+    try:
+        ext = filename.split(".")[-1] if "." in filename else "mp4"
+        unique_filename = f"{uuid.uuid4()}.{ext}"
+        
+        # Target the explicit 'videos' storage bucket directly
+        res = supabase.storage.from_("videos").upload(
+            file=file_bytes, 
+            path=unique_filename, 
+            file_options={"content-type": f"video/{ext}"}
+        )
+        
+        # Hydrate matching public URL out
+        public_url = supabase.storage.from_("videos").get_public_url(unique_filename)
+        return {"status": "success", "url": public_url}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}

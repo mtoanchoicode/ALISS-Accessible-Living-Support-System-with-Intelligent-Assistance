@@ -6,7 +6,7 @@ export type StorageItem = {
   image_uri: string;
   created_at: string;
   type: "item";
-  categories?: { name: string }; // For the join
+  categories?: { name: string };
 };
 
 export type StorageVideo = {
@@ -19,3 +19,12 @@ export type StorageVideo = {
   created_at: string;
   type: "video";
 };
+
+export type UserProfile = {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  image_uri: string;
+}
