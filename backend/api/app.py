@@ -15,6 +15,7 @@ from openai import OpenAI
 from PIL import Image
 from pydantic import BaseModel
 import time
+from fastapi.staticfiles import StaticFiles
 
 
 # Retrieval layer
@@ -24,7 +25,7 @@ from vision.context_builder import describe_and_save
 from vision.v2_graph_context_builder import save_graph, load_graph, process_and_remember_observation
 
 # Auth API
-from services.auth_service import login as auth_login, register as auth_register
+from services.auth_service import login_user as auth_login, register_user as auth_register
 
 # Item API
 from services.item_service import (
@@ -67,6 +68,9 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 
 GRAPH_SAVE_PATH = "./home_memory_graph.pkl"
 memory = load_graph(GRAPH_SAVE_PATH)
+IMAGE_DIR = "./memory_images"
+if not os.path.exists(IMAGE_DIR):
+    os.makedirs(IMAGE_DIR)
 
 from pathlib import Path
 from services.reid_service import ReIDConfig, PersonReIDRunner
@@ -215,7 +219,7 @@ def create_memory(
     except Exception as e:
         return JSONResponse({"error": f"Memory creation failed: {e}"}, status_code=500)
     
-def process_memory_v2_background(contents: bytes, obj_name: str, location: str, user_id: str, timestamp: float):
+def process_memory_v2_background(contents: bytes, obj_name: str, location: str, user_id: str, timestamp: float, image_storage_dir: str):
     try:
         pil_image = Image.open(io.BytesIO(contents)).convert("RGB")
         process_and_remember_observation(
@@ -225,7 +229,8 @@ def process_memory_v2_background(contents: bytes, obj_name: str, location: str, 
             room_name=location,
             user_id=user_id,
             timestamp=timestamp,
-            save_path=GRAPH_SAVE_PATH
+            save_path=GRAPH_SAVE_PATH,
+            image_storage_dir = image_storage_dir
         )
     except Exception as e:
         print(f"Background task (memoryv2) failed: {e}")
@@ -238,6 +243,7 @@ def create_memory_v2(
     image: UploadFile = File(...),
     user = Depends(get_current_user),
     timestamp: float = time.time(),
+    image_storage_dir = "./memory_images",
     model: str = Form("gpt-4o"),
 ):
     try:
@@ -247,8 +253,9 @@ def create_memory_v2(
             contents=contents,
             obj_name=obj_name,
             location=location,
-            user_id=user.id,
-            timestamp=timestamp
+            user_id=user["first_name"],
+            timestamp=timestamp,
+            image_storage_dir = image_storage_dir
         )
         return JSONResponse({"status": "Processing Memory", "message": "Image queued."}, status_code=202)
     except Exception as e:
@@ -256,6 +263,8 @@ def create_memory_v2(
             {"error": f"Memory creation failed: {e}"},
             status_code=500
         )
+
+app.mount("/images", StaticFiles(directory=IMAGE_DIR), name="images")
 
 @app.get("/memoryv2/objects")
 def list_graph_objects(user = Depends(get_current_user)):
@@ -336,7 +345,7 @@ def delete_graph_object(
 # -------------------------------------------------------------------
 @app.get("/chats")
 def list_chats(user = Depends(get_current_user)):
-    return get_user_sessions(user.id)
+    return get_user_sessions(user["id"])
 
 @app.get("/chats/{session_id}/messages")
 def list_chat_messages(session_id: str, user = Depends(get_current_user)):
@@ -354,7 +363,7 @@ def chat(body: ChatRequest, user = Depends(get_current_user)):
     session_id = body.session_id
     if not session_id:
         title = user_msg[:30] + ("..." if len(user_msg) > 30 else "")
-        new_session = create_session(user.id, title)
+        new_session = create_session(user["id"], title)
         if not new_session:
             return JSONResponse({"error": "Failed to create DB session"}, status_code=500)
         session_id = new_session["id"]
@@ -630,14 +639,14 @@ async def edit_video(video_id: str, update_data: dict):
 # -------------------------------------------------------------------
 @app.get("/users/me")
 async def read_user_profile(user = Depends(get_current_user)):
-    profile = fetch_user_profile(user.id)
+    profile = fetch_user_profile(user["id"])
     if profile:
         return profile
     return JSONResponse(status_code=404, content={"error": "User not found"})
 
 @app.put("/users/me")
 async def update_user_profile(update_data: dict, user = Depends(get_current_user)):
-    updated_profile = edit_user_profile(user.id, update_data)
+    updated_profile = edit_user_profile(user["id"], update_data)
     if updated_profile:
         return updated_profile
     return JSONResponse(status_code=400, content={"error": "Failed to update user profile"})

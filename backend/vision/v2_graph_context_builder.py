@@ -14,6 +14,7 @@ import pickle
 from datetime import datetime
 import plotly.graph_objects as go
 from collections import defaultdict
+import shutil
 from dotenv import load_dotenv
 import os
 load_dotenv()
@@ -230,6 +231,7 @@ class HomeMemoryGraph:
                 self.graph.add_edge(obj_nid, nb_nid, relation="next_to")
             if not self.graph.has_edge(nb_nid, obj_nid):
                 self.graph.add_edge(nb_nid, obj_nid, relation="next_to")
+        return obj_nid
 
     def print_summary(self):
         print("\n=== GRAPH SUMMARY ===")
@@ -436,15 +438,35 @@ def process_and_remember_observation(
     object_name: str,
     room_name: str,
     user_id: str,
+    image_storage_dir: str,
     timestamp: Optional[float] = None,
-    save_path: Optional[Union[str, Path]] = None
+    save_path: Optional[Union[str, Path]] = None,
 ) -> Dict[str, Any]:
     description = describe_object(image, graph, object_name)
 
     if timestamp is None:
         timestamp = time.time()
 
-    graph.add_observation(description, room_name, user_id, timestamp)
+    obj_nid = graph.add_observation(description, room_name, user_id, timestamp)
+
+    if obj_nid:
+        os.makedirs(image_storage_dir, exist_ok=True)
+        
+        safe_filename = f"{obj_nid.replace('::', '_')}_{int(timestamp)}.jpg"
+        full_image_path = os.path.join(image_storage_dir, safe_filename)
+        
+        # Save the image (assuming 'image' is bytes or path; if PIL, use .save())
+        if isinstance(image, (str, Path)):
+            shutil.copy(image, full_image_path)
+        elif isinstance(image, Image.Image):
+            image.save(full_image_path)
+        else: # bytes
+            with open(full_image_path, "wb") as f:
+                f.write(image)
+        
+        # 4. Attach URI to the node so frontend can access it
+        # You can use a relative path or a full URL here depending on your server
+        graph.graph.nodes[obj_nid]["image_uri"] = f"/images/{safe_filename}"
 
     if save_path:
         save_graph(graph, save_path)
