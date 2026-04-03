@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 from dotenv import load_dotenv
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, Form, UploadFile, BackgroundTasks
+from fastapi import FastAPI, File, Form, UploadFile, BackgroundTasks, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from openai import OpenAI
@@ -25,7 +25,7 @@ from vision.context_builder import describe_and_save
 from vision.v2_graph_context_builder import save_graph, load_graph, process_and_remember_observation
 
 # Auth API
-from services.auth_service import login_user as auth_login, register_user as auth_register
+from services.auth_service import login_user as auth_login, register_user as auth_register, logout_user as auth_logout
 
 # Item API
 from services.item_service import (
@@ -498,6 +498,19 @@ async def register_endpoint(req: RegisterRequest): # Unique name
     )
     if isinstance(result, dict) and result.get("status") == "error":
         return JSONResponse(status_code=400, content=result)
+    return result
+
+@app.post("/auth/logout")
+async def logout_endpoint(authorization: str = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        # Even if they don't have a token, we just tell the frontend "success" 
+        # so it clears the local state anyway.
+        return {"status": "success"}
+
+    # Extract the token without the "Bearer " part
+    token = authorization.split(" ")[1]
+    
+    result = auth_logout(token)
     return result
 
 # -------------------------------------------------------------------
