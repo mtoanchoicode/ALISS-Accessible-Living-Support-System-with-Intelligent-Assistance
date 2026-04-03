@@ -57,7 +57,7 @@ origins = [
 from pathlib import Path
 from collections import defaultdict
 
-from search_v2 import (
+from query.search_v2 import (
     ConversationState,
     GraphMemoryRetriever,
     GraphEntityResolver,
