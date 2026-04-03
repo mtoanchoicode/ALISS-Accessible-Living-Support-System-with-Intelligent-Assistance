@@ -22,3 +22,14 @@ def get_profile(user_id: str):
     except Exception as e:
         print(f"Error fetching user profile: {e}")
         return None
+
+def update_profile(user_id: str, update_data: dict):
+    """Update a user's profile data in the users table."""
+    try:
+        response = supabase.table("users").update(update_data).eq("id", user_id).execute()
+        if not response.data:
+            return None
+        return response.data[0]
+    except Exception as e:
+        print(f"Error updating user profile: {e}")
+        return None
