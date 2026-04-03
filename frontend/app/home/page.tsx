@@ -46,7 +46,7 @@ export default function HomePage() {
           <ArrowRight className="w-5 h-5 text-slate-400" />
         </Link>
         
-        <Link href="/scanner" className="flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:bg-slate-50 transition-colors">
+        <Link href="/camera" className="flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:bg-slate-50 transition-colors">
           <div className="flex items-center space-x-4">
             <div className="w-12 h-12 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-600">
               <Map className="w-6 h-6" />
