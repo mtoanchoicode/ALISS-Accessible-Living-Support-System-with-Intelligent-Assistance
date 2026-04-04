@@ -27,4 +27,5 @@ export type UserProfile = {
   email: string;
   phone: string;
   image_uri: string;
-}
+};
+

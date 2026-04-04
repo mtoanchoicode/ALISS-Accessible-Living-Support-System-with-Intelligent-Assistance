@@ -6,25 +6,42 @@ import { videoService } from "@/services/videoService";
 export function useStorage(isChecking: boolean) {
   const queryClient = useQueryClient();
 
-  const { data: rawItems = [], isLoading: itemsLoading, error: itemsError } = useQuery({
-    queryKey: ['items'],
+  const {
+    data: rawItems = [],
+    isLoading: itemsLoading,
+    error: itemsError,
+  } = useQuery({
+    queryKey: ["items"],
     queryFn: itemService.getAllItems,
     enabled: !isChecking,
   });
 
-  const { data: rawVideos = [], isLoading: videosLoading, error: videosError } = useQuery({
-    queryKey: ['videos'],
+  const {
+    data: rawVideos = [],
+    isLoading: videosLoading,
+    error: videosError,
+  } = useQuery({
+    queryKey: ["videos"],
     queryFn: videoService.getAllVideos,
     enabled: !isChecking,
   });
+
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = (error) => reject(error);
+    });
+  };
 
   const items = rawItems.map((i: any) => ({ ...i, type: "item" }));
   const videos = rawVideos.map((v: any) => ({ ...v, type: "video" }));
 
   const isLoading = itemsLoading || videosLoading;
-  const error = itemsError || videosError ? "Failed to load storage data." : null;
+  const error =
+    itemsError || videosError ? "Failed to load storage data." : null;
 
-  // Search & Tabs
   const [activeTab, setActiveTab] = useState<"items" | "videos">("items");
   const [searchQuery, setSearchQuery] = useState("");
   const currentSource = activeTab === "items" ? items : videos;
@@ -32,11 +49,18 @@ export function useStorage(isChecking: boolean) {
     return item.name?.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
-  // Actions
-  const [editingItem, setEditingItem] = useState<{ id: string; name: string; type: "item" | "video" } | null>(null);
+  const [editingItem, setEditingItem] = useState<{
+    id: string;
+    name: string;
+    type: "item" | "video";
+  } | null>(null);
   const [isUploadingVideo, setIsUploadingVideo] = useState(false);
 
-  const handleEditClick = (id: string, type: "item" | "video", currentName: string) => {
+  const handleEditClick = (
+    id: string,
+    type: "item" | "video",
+    currentName: string,
+  ) => {
     setEditingItem({ id, name: currentName, type });
   };
 
@@ -49,43 +73,88 @@ export function useStorage(isChecking: boolean) {
   };
 
   const updateItemMutation = useMutation({
-    mutationFn: ({ id, name }: { id: string, name: string }) => itemService.updateItem(id, { name }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['items'] }),
+    mutationFn: ({ id, name }: { id: string; name: string }) =>
+      itemService.updateItem(id, { name }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["items"] }),
+  });
+
+  const uploadItemMutation = useMutation({
+    mutationFn: async ({ name, file }: { name: string; file: File }) => {
+      // Convert the image to text so it fits in the JSON payload
+      const image_base64 = await fileToBase64(file);
+
+      return itemService.createItem({
+        name: name,
+        image_uri: image_base64,
+      });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["items"] }),
   });
 
   const updateVideoMutation = useMutation({
-    mutationFn: ({ id, name }: { id: string, name: string }) => videoService.updateVideo(id, { name }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['videos'] }),
+    mutationFn: ({ id, name }: { id: string; name: string }) =>
+      videoService.updateVideo(id, { name }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["videos"] }),
   });
 
   const uploadVideoMutation = useMutation({
-    mutationFn: ({ name, file }: { name: string, file: File }) => videoService.uploadVideo(name, file),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['videos'] }),
+    mutationFn: ({ name, file }: { name: string; file: File }) =>
+      videoService.uploadVideo(name, file),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["videos"] }),
   });
 
   const handleSaveEdit = async (newName: string) => {
     if (!editingItem) return;
     if (editingItem.type === "item") {
-      await updateItemMutation.mutateAsync({ id: editingItem.id, name: newName });
+      await updateItemMutation.mutateAsync({
+        id: editingItem.id,
+        name: newName,
+      });
     } else {
-      await updateVideoMutation.mutateAsync({ id: editingItem.id, name: newName });
+      await updateVideoMutation.mutateAsync({
+        id: editingItem.id,
+        name: newName,
+      });
     }
-    setEditingItem(null); 
+    setEditingItem(null);
   };
 
-  const handleUploadVideo = async (name: string, file: File) => {
-    await uploadVideoMutation.mutateAsync({ name, file });
-    setIsUploadingVideo(false);
-  };
+  const handleUploadItem = async (name: string, file: File) => {
+    try {
+      await uploadItemMutation.mutateAsync({ name, file });
+      setIsUploadingVideo(false); // Closes your modal
+    } catch (error) {
+      console.error("Failed to upload item:", error);
+      alert("Failed to upload item. Please try again.");
+    }
 
-  return {
-    items, videos, isLoading, error, 
-    refetch: () => {
-      queryClient.invalidateQueries({ queryKey: ['items'] });
-      queryClient.invalidateQueries({ queryKey: ['videos'] });
-    },
-    activeTab, setActiveTab, searchQuery, setSearchQuery, filteredItems,
-    editingItem, setEditingItem, isUploadingVideo, setIsUploadingVideo,
-    handleEditClick, handleAddNewClick, handleSaveEdit, handleUploadVideo
+    const handleUploadVideo = async (name: string, file: File) => {
+      await uploadVideoMutation.mutateAsync({ name, file });
+      setIsUploadingVideo(false);
+    };
+
+    return {
+      items,
+      videos,
+      isLoading,
+      error,
+      refetch: () => {
+        queryClient.invalidateQueries({ queryKey: ["items"] });
+        queryClient.invalidateQueries({ queryKey: ["videos"] });
+      },
+      activeTab,
+      setActiveTab,
+      searchQuery,
+      setSearchQuery,
+      filteredItems,
+      editingItem,
+      setEditingItem,
+      isUploadingVideo,
+      setIsUploadingVideo,
+      handleEditClick,
+      handleAddNewClick,
+      handleSaveEdit,
+      handleUploadVideo,
+    };
   };
 }

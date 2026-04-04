@@ -11,10 +11,14 @@ export function useCamera() {
   // --- Global Camera Controls ---
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
-  const [selectedObject, setSelectedObject] = useState<DetectedObject | null>(null);
+  const [selectedObject, setSelectedObject] = useState<DetectedObject | null>(
+    null,
+  );
   const [snapshotUrl, setSnapshotUrl] = useState<string | null>(null);
   const [isCameraActive, setIsCameraActive] = useState(true);
-  const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
+  const [facingMode, setFacingMode] = useState<"environment" | "user">(
+    "environment",
+  );
   const [selectedRoom, setSelectedRoom] = useState<string>("Living Room");
 
   // --- YOLO AI Detection State ---
@@ -23,7 +27,10 @@ export function useCamera() {
   const [isModelLoaded, setIsModelLoaded] = useState(false);
   const [objects, setObjects] = useState<DetectedObject[]>([]);
   const objectsRef = useRef<DetectedObject[]>([]);
-  const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 });
+  const [videoDimensions, setVideoDimensions] = useState({
+    width: 0,
+    height: 0,
+  });
   const [error, setError] = useState<string | null>(null);
 
   // --- Initialization & TF.js ---
@@ -54,7 +61,6 @@ export function useCamera() {
     return () => cancelAnimationFrame(requestRef.current);
   }, [detectFrame]);
 
-  // --- Background Context Builder (MemoryV2) ---
   useEffect(() => {
     if (!isCameraActive || isRecording) return; // Pause context building while explicitly recording video
 
@@ -63,13 +69,18 @@ export function useCamera() {
       if (!video) return;
 
       try {
-        const uniqueNames = Array.from(new Set(objectsRef.current.map(o => o.class)));
-        const objNameStr = uniqueNames.length > 0 ? uniqueNames.join(", ") : "background";
+        const uniqueNames = Array.from(
+          new Set(objectsRef.current.map((o) => o.class)),
+        );
+        const objNameStr =
+          uniqueNames.length > 0 ? uniqueNames.join(", ") : "background";
 
         const snap = captureFullSnapshot(video); // takes full frame snapshot
         const res = await fetch(snap);
         const blob = await res.blob();
-        const file = new File([blob], `context_${Date.now()}.jpg`, { type: "image/jpeg" });
+        const file = new File([blob], `context_${Date.now()}.jpg`, {
+          type: "image/jpeg",
+        });
 
         await visionService.createMemoryV2(objNameStr, selectedRoom, file);
       } catch (err) {
@@ -119,38 +130,50 @@ export function useCamera() {
     if (isRecording) return;
     setSelectedObject(obj);
     setIsCameraActive(false);
-    
+
     const snap = captureSnapshot(video, obj.bbox);
     setSnapshotUrl(snap);
   };
 
-  const handleSaveItem = async (itemData: Omit<RegisteredItem, "id" | "createdAt">) => {
-    saveRegisteredItem(itemData); // Local redundancy tracking
-    
+  const handleSaveItem = async (
+    itemData: Omit<RegisteredItem, "id" | "createdAt">,
+  ) => {
+    saveRegisteredItem(itemData);
+
     try {
-      // Map to correct API fields depending on your DB. StorageItem expects 'name'.
       await itemService.createItem({
-        name: itemData.name
+        name: itemData.name,
+        location: itemData.category,
+        image_base64: itemData.snapshotUrl,
       } as any);
+
+      if (itemData.snapshotUrl) {
+        try {
+          const res = await fetch(itemData.snapshotUrl);
+          const blob = await res.blob();
+          const file = new File([blob], `${itemData.name}.jpg`, {
+            type: "image/jpeg",
+          });
+
+          visionService
+            .createMemoryV2(
+              itemData.name,
+              itemData.category || "Unknown Location",
+              file,
+            )
+            .catch((e) => console.error("Vision Processing Sync Failed:", e));
+        } catch (err) {
+          console.error("Failed to construct image blob bounds: ", err);
+        }
+      }
+
+      setSelectedObject(null);
+      setSnapshotUrl(null);
+      setIsCameraActive(true);
     } catch (e) {
       console.error("Failed to post to backend DB items collection:", e);
+      throw e;
     }
-    
-    if (snapshotUrl) {
-       try {
-           const res = await fetch(snapshotUrl);
-           const blob = await res.blob();
-
-           const file = new File([blob], `${itemData.name}.jpg`, { type: "image/jpeg" });
-           visionService.createMemoryV2(itemData.name, itemData.category || "Unknown Location", file).catch(e => console.error("Vision Processing Sync Failed:", e));
-       } catch (err) {
-           console.error("Failed to construct image blob bounds: ", err);
-       }
-    }
-    
-    setSelectedObject(null);
-    setSnapshotUrl(null);
-    setIsCameraActive(true);
   };
 
   const handleCloseModal = () => {
@@ -179,15 +202,29 @@ export function useCamera() {
 
   return {
     // Media & Vision
-    webcamRef, isModelLoaded, objects, videoDimensions, error,
-    handleUserMedia, handleUserMediaError,
+    webcamRef,
+    isModelLoaded,
+    objects,
+    videoDimensions,
+    error,
+    handleUserMedia,
+    handleUserMediaError,
     // Controls
-    isRecording, recordingTime, toggleRecording,
-    facingMode, toggleFacingMode,
-    isCameraActive, toggleCameraActive,
+    isRecording,
+    recordingTime,
+    toggleRecording,
+    facingMode,
+    toggleFacingMode,
+    isCameraActive,
+    toggleCameraActive,
     toggleFullScreen,
-    selectedRoom, setSelectedRoom,
+    selectedRoom,
+    setSelectedRoom,
     // Storage Mappings
-    selectedObject, snapshotUrl, handleObjectSelect, handleSaveItem, handleCloseModal
+    selectedObject,
+    snapshotUrl,
+    handleObjectSelect,
+    handleSaveItem,
+    handleCloseModal,
   };
 }

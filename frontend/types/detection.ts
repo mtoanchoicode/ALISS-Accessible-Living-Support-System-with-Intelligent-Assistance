@@ -21,3 +21,11 @@ export interface RegisteredItem {
   snapshotUrl: string;
   createdAt: number;
 }
+
+export interface ItemModalProps {
+  object: DetectedObject | null;
+  snapshotUrl: string | null;
+  onClose: () => void;
+  onSave: (item: Omit<RegisteredItem, "id" | "createdAt">) => void;
+  defaultLocation?: string;
+}
