@@ -18,31 +18,43 @@ import time
 
 
 # Retrieval layer
-from query.search import search as kb_search
-# Vision ingestion
-from vision.context_builder import describe_and_save
-from vision.v2_graph_context_builder import save_graph, load_graph, process_and_remember_observation
+try:
+    from query.search import search as kb_search
+    # Vision ingestion
+    from vision.context_builder import describe_and_save
+    from vision.v2_graph_context_builder import save_graph, load_graph, process_and_remember_observation
 
-# Auth API
-from services.auth_service import login_user as auth_login, register_user as auth_register, logout_user as auth_logout
+    # Auth API
+    from services.auth_service import login_user as auth_login, register_user as auth_register, logout_user as auth_logout
 
-# Item API
-from services.item_service import (
-    get_item, update_item, delete_item, create_item, get_all_items as fetch_items
-)
-# Video API
-from services.video_service import (
-    get_video, update_video, delete_video, create_video, get_all_videos as fetch_videos, upload_video_file
-)
-# User API
-from services.user_service import (
-    get_profile as fetch_user_profile,
-    update_profile as edit_user_profile
-)
-# Chat DB API
-from services.chat_service import (
-    get_user_sessions, create_session, get_session_messages, save_message, update_session_title
-)
+    # Item API
+    from services.item_service import (
+        get_item, update_item, delete_item, create_item, get_all_items as fetch_items
+    )
+    # Video API
+    from services.video_service import (
+        get_video, update_video, delete_video, create_video, get_all_videos as fetch_videos, upload_video_file
+    )
+    # User API
+    from services.user_service import (
+        get_profile as fetch_user_profile,
+        update_profile as edit_user_profile
+    )
+    # Chat DB API
+    from services.chat_service import (
+        get_user_sessions, create_session, get_session_messages, save_message, update_session_title
+    )
+
+    from query.search_v2 import (
+        ConversationState,
+        GraphMemoryRetriever,
+        GraphEntityResolver,
+        retrieve_facts_hybrid,
+        llm_answer,
+        update_state,
+    )
+except ImportError as e:
+    print(f"CRITICAL: Missing module or import error: {e}")
 
 from api.deps import get_current_user
 from fastapi import Depends
@@ -55,37 +67,41 @@ origins = [
 
 #search_v2
 from pathlib import Path
-from collections import defaultdict
 
-from query.search_v2 import (
-    ConversationState,
-    GraphMemoryRetriever,
-    GraphEntityResolver,
-    retrieve_facts_hybrid,
-    llm_answer,
-    update_state,
-)
 # -------------------------------------------------------------------       
 # Environment & OpenAI setup
 # -------------------------------------------------------------------
 load_dotenv()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+if not OPENAI_API_KEY:
+    print("Warning: OPENAI_API_KEY not found in environment variables.")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 TTS_VOICE = os.getenv("TTS_VOICE", "alloy")
 TTS_MODEL = os.getenv("TTS_MODEL", "gpt-4o-mini-tts")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-GRAPH_SAVE_PATH = "./home_memory_graph.pkl"
-memory = load_graph(GRAPH_SAVE_PATH)
-IMAGE_DIR = "./memory_images"
-if not os.path.exists(IMAGE_DIR):
-    os.makedirs(IMAGE_DIR)
+GRAPH_SAVE_PATH = Path("home_memory_graph.pkl")
+IMAGE_DIR = Path("memory_images")
 
-from pathlib import Path
-from services.reid_service import ReIDConfig, PersonReIDRunner
+if not IMAGE_DIR.exists():
+    IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 
+# Initialize memory safely
+if GRAPH_SAVE_PATH.exists():
+    try:
+        memory = load_graph(str(GRAPH_SAVE_PATH))
+    except Exception as e:
+        print(f"Error loading graph: {e}. Initializing new graph.")
+        # Replace this with your actual Graph Class initialization if load_graph fails
+        memory = None 
+else:
+    print("No existing graph found. Starting with empty memory.")
+    memory = None
+
+
+# from services.reid_service import ReIDConfig, PersonReIDRunner
 # Global ReID Initialization
 # BASE_DIR_TMP = Path(__file__).resolve().parent.parent
 # try:
