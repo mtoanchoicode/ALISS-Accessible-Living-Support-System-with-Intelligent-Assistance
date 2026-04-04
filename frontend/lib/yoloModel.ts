@@ -39,7 +39,7 @@ export async function detectObjects(
     const outTensor = model!.predict(imgTensor) as tf.Tensor;
     const resTensor = outTensor.transpose([0, 2, 1]).squeeze(); // [8400, 16]
 
-    const boxesTensor = resTensor.slice([0, 0], [-1, 4]);       // [8400, 4]
+    const boxesTensor = resTensor.slice([0, 0], [-1, 4]); // [8400, 4]
     const classProbsTensor = resTensor.slice([0, 4], [-1, 12]); // [8400, 12]
 
     // Convert YOLO [xc, yc, w, h] to TFJS NMS [y1, x1, y2, x2]
@@ -52,8 +52,8 @@ export async function detectObjects(
     const x2 = xc.add(halfW);
     const nmsBoxes = tf.concat([y1, x1, y2, x2], 1);
 
-    const scoresTensor = classProbsTensor.max(1);               // best score per box
-    const classesTensor = classProbsTensor.argMax(1);           // best class per box
+    const scoresTensor = classProbsTensor.max(1); // best score per box
+    const classesTensor = classProbsTensor.argMax(1); // best class per box
 
     return [nmsBoxes, scoresTensor, classesTensor];
   });

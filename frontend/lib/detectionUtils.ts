@@ -1,11 +1,12 @@
 import { BoundingBox } from "@/types/detection";
 
 export function isPointInBox(x: number, y: number, box: BoundingBox): boolean {
+  const padding = 30; // Added padding to make it easier to click
   return (
-    x >= box.x &&
-    x <= box.x + box.width &&
-    y >= box.y &&
-    y <= box.y + box.height
+    x >= box.x - padding &&
+    x <= box.x + box.width + padding &&
+    y >= box.y - padding &&
+    y <= box.y + box.height + padding
   );
 }
 

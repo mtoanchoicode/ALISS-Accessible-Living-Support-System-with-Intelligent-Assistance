@@ -22,7 +22,6 @@ export const videoService = {
     formData.append("name", name);
     formData.append("file", file);
 
-    // Passed via apiClient without "content-type" defaults because of FormData instance check!
     return apiClient("/videos/upload", {
       method: "POST",
       body: formData,
