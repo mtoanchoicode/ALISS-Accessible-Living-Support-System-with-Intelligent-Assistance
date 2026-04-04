@@ -26,15 +26,6 @@ export function useStorage(isChecking: boolean) {
     enabled: !isChecking,
   });
 
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = (error) => reject(error);
-    });
-  };
-
   const items = rawItems.map((i: any) => ({ ...i, type: "item" }));
   const videos = rawVideos.map((v: any) => ({ ...v, type: "video" }));
 
@@ -45,6 +36,7 @@ export function useStorage(isChecking: boolean) {
   const [activeTab, setActiveTab] = useState<"items" | "videos">("items");
   const [searchQuery, setSearchQuery] = useState("");
   const currentSource = activeTab === "items" ? items : videos;
+
   const filteredItems = currentSource.filter((item: any) => {
     return item.name?.toLowerCase().includes(searchQuery.toLowerCase());
   });
@@ -54,6 +46,7 @@ export function useStorage(isChecking: boolean) {
     name: string;
     type: "item" | "video";
   } | null>(null);
+
   const [isUploadingVideo, setIsUploadingVideo] = useState(false);
 
   const handleEditClick = (
@@ -66,7 +59,8 @@ export function useStorage(isChecking: boolean) {
 
   const handleAddNewClick = () => {
     if (activeTab === "items") {
-      alert("Adding items flow to be implemented.");
+      // Items should be added via the AI Camera!
+      alert("Please go to the Camera tab to scan and register new items.");
     } else {
       setIsUploadingVideo(true);
     }
@@ -75,19 +69,6 @@ export function useStorage(isChecking: boolean) {
   const updateItemMutation = useMutation({
     mutationFn: ({ id, name }: { id: string; name: string }) =>
       itemService.updateItem(id, { name }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["items"] }),
-  });
-
-  const uploadItemMutation = useMutation({
-    mutationFn: async ({ name, file }: { name: string; file: File }) => {
-      // Convert the image to text so it fits in the JSON payload
-      const image_base64 = await fileToBase64(file);
-
-      return itemService.createItem({
-        name: name,
-        image_uri: image_base64,
-      });
-    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["items"] }),
   });
 
@@ -119,42 +100,32 @@ export function useStorage(isChecking: boolean) {
     setEditingItem(null);
   };
 
-  const handleUploadItem = async (name: string, file: File) => {
-    try {
-      await uploadItemMutation.mutateAsync({ name, file });
-      setIsUploadingVideo(false); // Closes your modal
-    } catch (error) {
-      console.error("Failed to upload item:", error);
-      alert("Failed to upload item. Please try again.");
-    }
+  const handleUploadVideo = async (name: string, file: File) => {
+    await uploadVideoMutation.mutateAsync({ name, file });
+    setIsUploadingVideo(false);
+  };
 
-    const handleUploadVideo = async (name: string, file: File) => {
-      await uploadVideoMutation.mutateAsync({ name, file });
-      setIsUploadingVideo(false);
-    };
-
-    return {
-      items,
-      videos,
-      isLoading,
-      error,
-      refetch: () => {
-        queryClient.invalidateQueries({ queryKey: ["items"] });
-        queryClient.invalidateQueries({ queryKey: ["videos"] });
-      },
-      activeTab,
-      setActiveTab,
-      searchQuery,
-      setSearchQuery,
-      filteredItems,
-      editingItem,
-      setEditingItem,
-      isUploadingVideo,
-      setIsUploadingVideo,
-      handleEditClick,
-      handleAddNewClick,
-      handleSaveEdit,
-      handleUploadVideo,
-    };
+  return {
+    items,
+    videos,
+    isLoading,
+    error,
+    refetch: () => {
+      queryClient.invalidateQueries({ queryKey: ["items"] });
+      queryClient.invalidateQueries({ queryKey: ["videos"] });
+    },
+    activeTab,
+    setActiveTab,
+    searchQuery,
+    setSearchQuery,
+    filteredItems,
+    editingItem,
+    setEditingItem,
+    isUploadingVideo,
+    setIsUploadingVideo,
+    handleEditClick,
+    handleAddNewClick,
+    handleSaveEdit,
+    handleUploadVideo,
   };
 }
