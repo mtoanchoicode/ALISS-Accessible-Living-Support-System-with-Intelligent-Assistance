@@ -4,19 +4,25 @@ import { DetectedObject } from "@/types/detection";
 let model: tf.GraphModel | null = null;
 
 // Custom model labels (12 classes) based on metadata.yaml
-const CUSTOM_LABELS = [
-  "bed", "sofa", "chair", "table", "lamp", "tv", 
-  "laptop", "wardrobe", "window", "door", "potted plant", "photo frame"
+const COCO_LABELS = [
+  "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
+  "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
+  "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
+  "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard",
+  "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple",
+  "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch",
+  "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "cell phone",
+  "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear",
+  "hair drier", "toothbrush"
 ];
 
 export async function loadModel() {
   if (!model) {
     await tf.ready();
-    model = await tf.loadGraphModel("/model/model.json");
+    model = await tf.loadGraphModel("/model_v2/model.json");
   }
   return model;
 }
-
 export async function detectObjects(
   video: HTMLVideoElement,
 ): Promise<DetectedObject[]> {
@@ -58,7 +64,7 @@ export async function detectObjects(
     scores as tf.Tensor1D,
     30,      // Max Output Size
     0.45,    // IOU Threshold
-    0.20,    // Score Threshold (lowered slightly for custom fine-tuned model)
+    0.50,    // Score Threshold (lowered slightly for custom fine-tuned model)
   );
 
   // 5. Move to CPU
@@ -80,24 +86,21 @@ export async function detectObjects(
   return (indices as number[])
     .map((idx) => {
       const classId = (cData as number[])[idx];
+      if (classId < 24 || classId > 80) return null;
+
       const [y1, x1, y2, x2] = (bData as number[][])[idx];
       
-      const width = x2 - x1;
-      const height = y2 - y1;
-      const xCenter = x1 + width / 2;
-      const yCenter = y1 + height / 2;
-
       return {
         id: `det-${Date.now()}-${idx}`,
-        class: CUSTOM_LABELS[classId] || `unknown_${classId}`,
+        class: COCO_LABELS[classId],
         score: (sData as number[])[idx],
         bbox: {
-          x: (xCenter - width / 2) * widthRatio,
-          y: (yCenter - height / 2) * heightRatio,
-          width: width * widthRatio,
-          height: height * heightRatio,
+          x: x1 * widthRatio,
+          y: y1 * heightRatio,
+          width: (x2 - x1) * widthRatio,
+          height: (y2 - y1) * heightRatio,
         },
       };
     })
-    .filter(Boolean) as DetectedObject[];
+    .filter((item): item is DetectedObject => item !== null);
 }
