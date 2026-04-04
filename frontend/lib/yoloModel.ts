@@ -40,7 +40,7 @@ export async function detectObjects(
     const resTensor = outTensor.transpose([0, 2, 1]).squeeze(); // [8400, 16]
 
     const boxesTensor = resTensor.slice([0, 0], [-1, 4]); // [8400, 4]
-    const classProbsTensor = resTensor.slice([0, 4], [-1, 12]); // [8400, 12]
+    const classProbsTensor = resTensor.slice([0, 4], [-1, 80]);
 
     // Convert YOLO [xc, yc, w, h] to TFJS NMS [y1, x1, y2, x2]
     const [xc, yc, w, h] = boxesTensor.split(4, 1);
