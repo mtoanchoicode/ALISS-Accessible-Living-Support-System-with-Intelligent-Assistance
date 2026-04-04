@@ -15,9 +15,14 @@ def get_video(video_id: str):
     response = supabase.table("videos").select("*").eq("id", video_id).single().execute()
     return response.data
 
-def get_all_videos():
-    response = supabase.table("videos").select("*").order("created_at", desc=True).execute()
-    return response.data
+def get_all_videos(user_id: str):
+    try:
+        # Add the .eq("user_id", user_id) filter!
+        response = supabase.table("videos").select("*").eq("user_id", user_id).execute()
+        return response.data
+    except Exception as e:
+        print(f"Error fetching videos: {e}")
+        return []
 
 def delete_video(video_id: str):
     response = supabase.table("videos").delete().eq("id", video_id).execute()

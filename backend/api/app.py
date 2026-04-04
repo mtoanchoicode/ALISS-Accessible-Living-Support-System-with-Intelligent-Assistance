@@ -4,6 +4,7 @@ import io
 import base64
 from collections import defaultdict
 from typing import Any, Dict, List, Optional
+import uuid
 
 import numpy as np
 from dotenv import load_dotenv
@@ -14,6 +15,7 @@ from fastapi.responses import JSONResponse, Response
 from openai import OpenAI
 from PIL import Image
 from pydantic import BaseModel
+from services.auth_service import supabase 
 import time
 
 
@@ -107,7 +109,7 @@ BASE_DIR_TMP = Path(__file__).resolve().parent.parent
 try:
     reid_config = ReIDConfig(
         repo_root=BASE_DIR_TMP,
-        yolo_weights=BASE_DIR_TMP / "yolov8n.pt",
+        yolo_weights= "yolov8n.pt",
         gallery_dir=BASE_DIR_TMP / "gallery",
         torch_home=BASE_DIR_TMP / ".torchreid",
     )
@@ -592,13 +594,14 @@ async def logout_endpoint(authorization: str = Header(None)):
 # Item API (CRUD)
 # -------------------------------------------------------------------
 @app.get("/items/{item_id}")
-async def read_item(item_id: str):
+async def read_item(item_id: str, user: dict = Depends(get_current_user)):
+    # Now this route is protected!
     return get_item(item_id)
 
 @app.get("/items")
-async def read_all_items():
-    # Calling the renamed import 'fetch_items'
-    return fetch_items()
+async def read_all_items(user: dict = Depends(get_current_user)):
+    # Pass the user's ID to the service function
+    return fetch_items(user["id"])
 
 @app.post("/items")
 async def create_new_item(item_data: dict, user = Depends(get_current_user)):
@@ -616,16 +619,18 @@ async def edit_item(item_id: str, update_data: dict, user = Depends(get_current_
 # Video API (CRUD)
 # -------------------------------------------------------------------
 @app.get("/videos/{video_id}")
-async def read_video(video_id: str):
+async def read_video(video_id: str, user: dict = Depends(get_current_user)):
+    # Now this route is protected!
     return get_video(video_id)
 
 @app.get("/videos")
-async def read_all_videos():
-    # Calling the renamed import 'fetch_videos'
-    return fetch_videos()
+async def read_all_videos(user: dict = Depends(get_current_user)):
+    # Pass the user's ID to the service function
+    return fetch_videos(user["id"])
 
 @app.post("/videos")
-async def create_new_video(video_data: dict):
+async def create_new_video(video_data: dict, user: dict = Depends(get_current_user)):
+    video_data["user_id"] = user["id"]
     return create_video(video_data)
 
 def process_reid_video_background(record_id: str, in_path: str, filename: str):
@@ -668,7 +673,8 @@ def process_reid_video_background(record_id: str, in_path: str, filename: str):
 async def upload_video_endpoint(
     background_tasks: BackgroundTasks,
     name: str = Form(...),
-    file: UploadFile = File(...)
+    file: UploadFile = File(...),
+    user: dict = Depends(get_current_user)
 ):
     import tempfile
     import os
@@ -681,9 +687,10 @@ async def upload_video_endpoint(
             in_path = in_tmp.name
             
         video_data = {
+            "user_id": user["id"],
             "name": name,
             "video_uri": "processing",
-            "source_type": "mobile"
+            "source_type": "mobile",
         }
         
         record = create_video(video_data)
@@ -737,6 +744,46 @@ async def update_user_profile(update_data: dict, user = Depends(get_current_user
     updated_profile = edit_user_profile(user["id"], update_data)
     if updated_profile:
         return updated_profile
+    return JSONResponse(status_code=400, content={"error": "Failed to update user profile"})
+
+@app.put("/users/me")
+async def update_user_profile(update_data: dict, user = Depends(get_current_user)):
+    
+    avatar_b64 = update_data.pop("avatar_base64", None)
+    
+    if avatar_b64:
+        try:
+            if "," in avatar_b64:
+                header, base64_str = avatar_b64.split(",", 1)
+                ext = header.split(";")[0].split("/")[1] # Extracts 'jpeg', 'png', etc.
+            else:
+                base64_str = avatar_b64
+                ext = "jpg"
+            
+            # Convert back to raw image bytes
+            image_bytes = base64.b64decode(base64_str)
+            
+            filename = f"{user['id']}_{uuid.uuid4().hex[:8]}.{ext}"
+            
+            # Upload directly to the Supabase storage bucket
+            supabase.storage.from_("avatars").upload(
+                path=filename,
+                file=image_bytes,
+                file_options={"content-type": f"image/{ext}"}
+            )
+            
+            public_url = supabase.storage.from_("avatars").get_public_url(filename)
+            update_data["image_uri"] = public_url
+            
+        except Exception as e:
+            print(f"Avatar upload failed: {e}")
+            return JSONResponse(status_code=500, content={"error": "Failed to upload avatar"})
+
+    updated_profile = edit_user_profile(user["id"], update_data)
+    
+    if updated_profile:
+        return updated_profile
+        
     return JSONResponse(status_code=400, content={"error": "Failed to update user profile"})
 
 #--------------------------------------------------

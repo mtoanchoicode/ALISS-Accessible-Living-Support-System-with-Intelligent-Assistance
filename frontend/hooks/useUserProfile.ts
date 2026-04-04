@@ -6,18 +6,18 @@ import { UserProfile } from "@/types";
 
 export function useUserProfile() {
   const router = useRouter();
-  
+
   // 1. Data States
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  
+
   // 2. Edit States
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  
+
   // 3. Auth States
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
@@ -27,7 +27,7 @@ export function useUserProfile() {
       try {
         const data = await userService.getUserProfile();
         setProfile(data);
-        
+
         // Sync local edit states automatically
         setFirstName(data.first_name || "");
         setLastName(data.last_name || "");
@@ -56,20 +56,36 @@ export function useUserProfile() {
     }
   };
 
+  // --- Helper: Convert File to Base64 String ---
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = (error) => reject(error);
+    });
+  };
+
+  // --- Edit Actions ---
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       setIsSaving(true);
-      const updatedData = await userService.updateUserProfile({ 
-        first_name: firstName, 
-        last_name: lastName 
-      });
-      setProfile(updatedData);
-      
+
+      // We use 'any' here temporarily so TypeScript doesn't complain about the new avatar_base64 field
+      const updatePayload: any = {
+        first_name: firstName,
+        last_name: lastName,
+      };
+
+      // If they picked a new image, encode it and pack it into the JSON
       if (selectedFile) {
-        console.log("Image upload to be implemented");
+        updatePayload.avatar_base64 = await fileToBase64(selectedFile);
       }
-      
+
+      const updatedData = await userService.updateUserProfile(updatePayload);
+      setProfile(updatedData);
+
       router.push("/profile");
     } catch (error) {
       console.error("Failed to update profile", error);
@@ -82,9 +98,9 @@ export function useUserProfile() {
   const handleLogout = async () => {
     setIsLoggingOut(true);
     try {
-      await authService.logoutApi(); 
-      authService.logout(); 
-      router.push("/"); 
+      await authService.logoutApi();
+      authService.logout();
+      router.push("/");
     } catch (error) {
       console.error("Failed to log out:", error);
     } finally {
@@ -92,14 +108,21 @@ export function useUserProfile() {
     }
   };
 
-  return { 
-    profile, initials, isLoading, 
+  return {
+    profile,
+    initials,
+    isLoading,
     // Auth mapping
-    isLoggingOut, handleLogout,
+    isLoggingOut,
+    handleLogout,
     // Edit mapping
-    firstName, setFirstName,
-    lastName, setLastName,
+    firstName,
+    setFirstName,
+    lastName,
+    setLastName,
     avatarPreview,
-    isSaving, handleImageChange, handleSave 
+    isSaving,
+    handleImageChange,
+    handleSave,
   };
 }
