@@ -1,11 +1,11 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://192.168.1.202:8000";
-
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
 export const apiClient = async (
   endpoint: string,
   options: RequestInit = {},
 ) => {
-  const token = typeof window !== "undefined" ? localStorage.getItem("aliss_token") : null;
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("aliss_token") : null;
 
   const headers: Record<string, string> = {
     ...((options.headers as Record<string, string>) || {}),
@@ -29,7 +29,7 @@ export const apiClient = async (
     const errText = await response.text();
     console.error("Authentication failed 401:", errText);
     if (typeof window !== "undefined") {
-       alert("ALISS API 401 Unauthorized Error: " + errText);
+      alert("ALISS API 401 Unauthorized Error: " + errText);
     }
     throw new Error("Unauthorized");
   }

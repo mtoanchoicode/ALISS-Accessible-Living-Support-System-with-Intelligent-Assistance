@@ -4,9 +4,19 @@ import { DetectedObject } from "@/types/detection";
 let model: tf.GraphModel | null = null;
 
 // Custom model labels (12 classes) based on metadata.yaml
-const CUSTOM_LABELS = [
-  "bed", "sofa", "chair", "table", "lamp", "tv", 
-  "laptop", "wardrobe", "window", "door", "potted plant", "photo frame"
+const COCO_LABELS = [
+  "bed",
+  "sofa",
+  "chair",
+  "table",
+  "lamp",
+  "tv",
+  "laptop",
+  "wardrobe",
+  "window",
+  "door",
+  "potted plant",
+  "photo frame"
 ];
 
 export async function loadModel() {
@@ -33,7 +43,7 @@ export async function detectObjects(
     const outTensor = model!.predict(imgTensor) as tf.Tensor;
     const resTensor = outTensor.transpose([0, 2, 1]).squeeze(); // [8400, 16]
 
-    const boxesTensor = resTensor.slice([0, 0], [-1, 4]);       // [8400, 4]
+    const boxesTensor = resTensor.slice([0, 0], [-1, 4]); // [8400, 4]
     const classProbsTensor = resTensor.slice([0, 4], [-1, 12]); // [8400, 12]
 
     // Convert YOLO [xc, yc, w, h] to TFJS NMS [y1, x1, y2, x2]
@@ -46,8 +56,8 @@ export async function detectObjects(
     const x2 = xc.add(halfW);
     const nmsBoxes = tf.concat([y1, x1, y2, x2], 1);
 
-    const scoresTensor = classProbsTensor.max(1);               // best score per box
-    const classesTensor = classProbsTensor.argMax(1);           // best class per box
+    const scoresTensor = classProbsTensor.max(1); // best score per box
+    const classesTensor = classProbsTensor.argMax(1); // best class per box
 
     return [nmsBoxes, scoresTensor, classesTensor];
   });
@@ -56,9 +66,9 @@ export async function detectObjects(
   const indicesTensor = await tf.image.nonMaxSuppressionAsync(
     boxes as tf.Tensor2D,
     scores as tf.Tensor1D,
-    30,      // Max Output Size
-    0.45,    // IOU Threshold
-    0.20,    // Score Threshold (lowered slightly for custom fine-tuned model)
+    30, // Max Output Size
+    0.45, // IOU Threshold
+    0.2, // Score Threshold (lowered slightly for custom fine-tuned model)
   );
 
   // 5. Move to CPU
@@ -81,7 +91,7 @@ export async function detectObjects(
     .map((idx) => {
       const classId = (cData as number[])[idx];
       const [y1, x1, y2, x2] = (bData as number[][])[idx];
-      
+
       const width = x2 - x1;
       const height = y2 - y1;
       const xCenter = x1 + width / 2;
@@ -89,7 +99,7 @@ export async function detectObjects(
 
       return {
         id: `det-${Date.now()}-${idx}`,
-        class: CUSTOM_LABELS[classId] || `unknown_${classId}`,
+        class: COCO_LABELS[classId] || `unknown_${classId}`,
         score: (sData as number[])[idx],
         bbox: {
           x: (xCenter - width / 2) * widthRatio,
