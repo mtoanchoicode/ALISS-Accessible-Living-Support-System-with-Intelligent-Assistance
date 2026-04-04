@@ -5,9 +5,6 @@ import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import {
   StopCircle,
-  RefreshCw,
-  Maximize2,
-  Settings2,
   ArrowLeft,
 } from "lucide-react";
 import CameraView from "../../components/CameraView";
@@ -22,10 +19,8 @@ export default function RecordPage() {
     recordingTime,
     toggleRecording,
     facingMode,
-    toggleFacingMode,
     isCameraActive,
     toggleCameraActive,
-    toggleFullScreen,
     selectedObject,
     snapshotUrl,
     handleObjectSelect,
@@ -115,7 +110,6 @@ export default function RecordPage() {
               </div>
             </div>
 
-            {/* Right section */}
             <div className="flex items-start lg:items-center space-x-2">
               <div className="relative group">
                 <select
