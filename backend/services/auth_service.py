@@ -58,3 +58,12 @@ def register_user(first_name, last_name, phone, email, password):
             return {"status": "error", "message": "Email already in use."}
         
         return {"status": "error", "message": error_msg}
+
+def logout_user(token: str):
+    """Signs the user out of Supabase to invalidate their session."""
+    try:
+        # We must pass the user's specific token to sign out that specific session
+        res = supabase.auth.admin.sign_out(token)
+        return {"status": "success", "message": "Logged out successfully"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}

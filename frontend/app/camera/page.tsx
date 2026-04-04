@@ -17,7 +17,8 @@ export default function RecordPage() {
     isCameraActive, toggleCameraActive,
     toggleFullScreen,
     selectedObject, snapshotUrl, handleObjectSelect, handleSaveItem, handleCloseModal,
-    webcamRef, isModelLoaded, objects, videoDimensions, error, handleUserMedia, handleUserMediaError
+    webcamRef, isModelLoaded, objects, videoDimensions, error, handleUserMedia, handleUserMediaError,
+    selectedRoom, setSelectedRoom
   } = useCamera();
 
   const formatTime = (seconds: number) => {
@@ -81,6 +82,21 @@ export default function RecordPage() {
                   </span>
                 </motion.div>
               )}
+            </div>
+
+            {/* Room Selector */}
+            <div className="ml-4 pointer-events-auto">
+              <select
+                value={selectedRoom}
+                onChange={(e) => setSelectedRoom(e.target.value)}
+                className="bg-black/60 backdrop-blur-md text-white text-xs font-medium px-3 py-1.5 rounded-full outline-none border border-white/10"
+              >
+                <option value="Living Room">Living Room</option>
+                <option value="Kitchen">Kitchen</option>
+                <option value="Bedroom">Bedroom</option>
+                <option value="Bathroom">Bathroom</option>
+                <option value="Hallway">Hallway</option>
+              </select>
             </div>
           </div>
 
