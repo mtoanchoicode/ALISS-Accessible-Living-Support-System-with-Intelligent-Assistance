@@ -55,30 +55,30 @@ export function useCamera() {
   }, [detectFrame]);
 
   // --- Background Context Builder (MemoryV2) ---
-  useEffect(() => {
-    if (!isCameraActive || isRecording) return; // Pause context building while explicitly recording video
+  // useEffect(() => {
+  //   if (!isCameraActive || isRecording) return; // Pause context building while explicitly recording video
 
-    const timer = setInterval(async () => {
-      const video = webcamRef.current?.video;
-      if (!video) return;
+  //   const timer = setInterval(async () => {
+  //     const video = webcamRef.current?.video;
+  //     if (!video) return;
 
-      try {
-        const uniqueNames = Array.from(new Set(objectsRef.current.map(o => o.class)));
-        const objNameStr = uniqueNames.length > 0 ? uniqueNames.join(", ") : "background";
+  //     try {
+  //       const uniqueNames = Array.from(new Set(objectsRef.current.map(o => o.class)));
+  //       const objNameStr = uniqueNames.length > 0 ? uniqueNames.join(", ") : "background";
 
-        const snap = captureFullSnapshot(video); // takes full frame snapshot
-        const res = await fetch(snap);
-        const blob = await res.blob();
-        const file = new File([blob], `context_${Date.now()}.jpg`, { type: "image/jpeg" });
+  //       const snap = captureFullSnapshot(video); // takes full frame snapshot
+  //       const res = await fetch(snap);
+  //       const blob = await res.blob();
+  //       const file = new File([blob], `context_${Date.now()}.jpg`, { type: "image/jpeg" });
 
-        await visionService.createMemoryV2(objNameStr, selectedRoom, file);
-      } catch (err) {
-        console.error("Context builder failed", err);
-      }
-    }, 4000);
+  //       await visionService.createMemoryV2(objNameStr, selectedRoom, file);
+  //     } catch (err) {
+  //       console.error("Context builder failed", err);
+  //     }
+  //   }, 4000);
 
-    return () => clearInterval(timer);
-  }, [isCameraActive, isRecording, selectedRoom]);
+  //   return () => clearInterval(timer);
+  // }, [isCameraActive, isRecording, selectedRoom]);
 
   // --- Utility & Event Handlers ---
   const handleUserMedia = () => {
