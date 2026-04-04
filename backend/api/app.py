@@ -4,6 +4,7 @@ import io
 import base64
 from collections import defaultdict
 from typing import Any, Dict, List, Optional
+import uuid
 
 import numpy as np
 from dotenv import load_dotenv
@@ -14,6 +15,7 @@ from fastapi.responses import JSONResponse, Response
 from openai import OpenAI
 from PIL import Image
 from pydantic import BaseModel
+from services.auth_service import supabase 
 import time
 
 
@@ -101,20 +103,20 @@ else:
     memory = None
 
 
-# from services.reid_service import ReIDConfig, PersonReIDRunner
+from services.reid_service import ReIDConfig, PersonReIDRunner
 # Global ReID Initialization
-# BASE_DIR_TMP = Path(__file__).resolve().parent.parent
-# try:
-#     reid_config = ReIDConfig(
-#         repo_root=BASE_DIR_TMP,
-#         yolo_weights=BASE_DIR_TMP / "yolov8n.pt",
-#         gallery_dir=BASE_DIR_TMP / "gallery",
-#         torch_home=BASE_DIR_TMP / ".torchreid",
-#     )
-#     reid_runner = PersonReIDRunner(reid_config)
-# except Exception as e:
-#     print(f"Warning: Failed to initialize PersonReIDRunner: {e}")
-#     reid_runner = None
+BASE_DIR_TMP = Path(__file__).resolve().parent.parent
+try:
+    reid_config = ReIDConfig(
+        repo_root=BASE_DIR_TMP,
+        yolo_weights= "yolov8n.pt",
+        gallery_dir=BASE_DIR_TMP / "gallery",
+        torch_home=BASE_DIR_TMP / ".torchreid",
+    )
+    reid_runner = PersonReIDRunner(reid_config)
+except Exception as e:
+    print(f"Warning: Failed to initialize PersonReIDRunner: {e}")
+    reid_runner = None
 
 
 # -------------------------------------------------------------------
@@ -592,13 +594,14 @@ async def logout_endpoint(authorization: str = Header(None)):
 # Item API (CRUD)
 # -------------------------------------------------------------------
 @app.get("/items/{item_id}")
-async def read_item(item_id: str):
+async def read_item(item_id: str, user: dict = Depends(get_current_user)):
+    # Now this route is protected!
     return get_item(item_id)
 
 @app.get("/items")
-async def read_all_items():
-    # Calling the renamed import 'fetch_items'
-    return fetch_items()
+async def read_all_items(user: dict = Depends(get_current_user)):
+    # Pass the user's ID to the service function
+    return fetch_items(user["id"])
 
 @app.post("/items")
 async def create_new_item(item_data: dict, user = Depends(get_current_user)):
@@ -615,112 +618,116 @@ async def edit_item(item_id: str, update_data: dict, user = Depends(get_current_
 # -------------------------------------------------------------------
 # Video API (CRUD)
 # -------------------------------------------------------------------
-# @app.get("/videos/{video_id}")
-# async def read_video(video_id: str):
-#     return get_video(video_id)
+@app.get("/videos/{video_id}")
+async def read_video(video_id: str, user: dict = Depends(get_current_user)):
+    # Now this route is protected!
+    return get_video(video_id)
 
-# @app.get("/videos")
-# async def read_all_videos():
-#     # Calling the renamed import 'fetch_videos'
-#     return fetch_videos()
+@app.get("/videos")
+async def read_all_videos(user: dict = Depends(get_current_user)):
+    # Pass the user's ID to the service function
+    return fetch_videos(user["id"])
 
-# @app.post("/videos")
-# async def create_new_video(video_data: dict):
-#     return create_video(video_data)
+@app.post("/videos")
+async def create_new_video(video_data: dict, user: dict = Depends(get_current_user)):
+    video_data["user_id"] = user["id"]
+    return create_video(video_data)
 
-# def process_reid_video_background(record_id: str, in_path: str, filename: str):
-#     import os
-#     try:
-#         out_path = f"{in_path}_annotated.mp4"
+def process_reid_video_background(record_id: str, in_path: str, filename: str):
+    import os
+    try:
+        out_path = f"{in_path}_annotated.mp4"
         
-#         if reid_runner is not None:
-#             from pathlib import Path
-#             print(f"[Background Worker] Processing video ID: {record_id} via ReID Runner")
-#             reid_runner.process_video(Path(in_path), Path(out_path))
-#         else:
-#             import shutil
-#             shutil.copy(in_path, out_path)
+        if reid_runner is not None:
+            from pathlib import Path
+            print(f"[Background Worker] Processing video ID: {record_id} via ReID Runner")
+            reid_runner.process_video(Path(in_path), Path(out_path))
+        else:
+            import shutil
+            shutil.copy(in_path, out_path)
 
-#         with open(out_path, "rb") as out_f:
-#             processed_contents = out_f.read()
+        with open(out_path, "rb") as out_f:
+            processed_contents = out_f.read()
             
-#         print(f"[Background Worker] Uploading Video ID {record_id} to Storage...")
-#         storage_res = upload_video_file(processed_contents, filename)
+        print(f"[Background Worker] Uploading Video ID {record_id} to Storage...")
+        storage_res = upload_video_file(processed_contents, filename)
         
-#         if storage_res.get("status") == "success":
-#             public_url = storage_res["url"]
-#             update_video(record_id, {"video_uri": public_url})
-#             print(f"[Background Worker] Completed Video ID {record_id}.")
-#         else:
-#             print(f"Background Upload Error: {storage_res.get('message')}")
+        if storage_res.get("status") == "success":
+            public_url = storage_res["url"]
+            update_video(record_id, {"video_uri": public_url})
+            print(f"[Background Worker] Completed Video ID {record_id}.")
+        else:
+            print(f"Background Upload Error: {storage_res.get('message')}")
             
-#     except Exception as e:
-#         print(f"Video Processing Background task failed: {e}")
-#     finally:
-#         if os.path.exists(in_path): os.remove(in_path)
-#         try:
-#             if os.path.exists(out_path): os.remove(out_path)
-#         except Exception:
-#             pass
+    except Exception as e:
+        print(f"Video Processing Background task failed: {e}")
+    finally:
+        if os.path.exists(in_path): os.remove(in_path)
+        try:
+            if os.path.exists(out_path): os.remove(out_path)
+        except Exception:
+            pass
 
 
-# @app.post("/videos/upload")
-# async def upload_video_endpoint(
-#     background_tasks: BackgroundTasks,
-#     name: str = Form(...),
-#     file: UploadFile = File(...)
-# ):
-#     import tempfile
-#     import os
-#     in_path = None
-#     try:
-#         contents = await file.read()
+@app.post("/videos/upload")
+async def upload_video_endpoint(
+    background_tasks: BackgroundTasks,
+    name: str = Form(...),
+    file: UploadFile = File(...),
+    user: dict = Depends(get_current_user)
+):
+    import tempfile
+    import os
+    in_path = None
+    try:
+        contents = await file.read()
         
-#         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as in_tmp:
-#             in_tmp.write(contents)
-#             in_path = in_tmp.name
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as in_tmp:
+            in_tmp.write(contents)
+            in_path = in_tmp.name
             
-#         video_data = {
-#             "name": name,
-#             "video_uri": "processing",
-#             "source_type": "mobile"
-#         }
+        video_data = {
+            "user_id": user["id"],
+            "name": name,
+            "video_uri": "processing",
+            "source_type": "mobile",
+        }
         
-#         record = create_video(video_data)
+        record = create_video(video_data)
         
-#         if isinstance(record, list) and len(record) > 0:
-#             record_id = record[0]["id"]
-#         elif isinstance(record, dict) and "id" in record:
-#             record_id = record["id"]
-#         else:
-#             record_id = getattr(record, 'id', None)
+        if isinstance(record, list) and len(record) > 0:
+            record_id = record[0]["id"]
+        elif isinstance(record, dict) and "id" in record:
+            record_id = record["id"]
+        else:
+            record_id = getattr(record, 'id', None)
             
-#         if not record_id:
-#             if in_path and os.path.exists(in_path): os.remove(in_path)
-#             return JSONResponse(status_code=500, content={"error": "Failed to create DB video abstract"})
+        if not record_id:
+            if in_path and os.path.exists(in_path): os.remove(in_path)
+            return JSONResponse(status_code=500, content={"error": "Failed to create DB video abstract"})
 
-#         background_tasks.add_task(
-#             process_reid_video_background,
-#             record_id=record_id,
-#             in_path=in_path,
-#             filename=file.filename
-#         )
+        background_tasks.add_task(
+            process_reid_video_background,
+            record_id=record_id,
+            in_path=in_path,
+            filename=file.filename
+        )
         
-#         return {"saved": True, "record": record}
-#     except Exception as e:
-#         if in_path and os.path.exists(in_path): os.remove(in_path)
-#         return JSONResponse(
-#             {"error": f"Video upload sequence failed: {e}"},
-#             status_code=500
-#         )
+        return {"saved": True, "record": record}
+    except Exception as e:
+        if in_path and os.path.exists(in_path): os.remove(in_path)
+        return JSONResponse(
+            {"error": f"Video upload sequence failed: {e}"},
+            status_code=500
+        )
 
-# @app.delete("/videos/{video_id}")
-# async def remove_video(video_id: str):
-#     return delete_video(video_id)
+@app.delete("/videos/{video_id}")
+async def remove_video(video_id: str):
+    return delete_video(video_id)
 
-# @app.put("/videos/{video_id}")
-# async def edit_video(video_id: str, update_data: dict):
-#     return update_video(video_id, update_data)
+@app.put("/videos/{video_id}")
+async def edit_video(video_id: str, update_data: dict):
+    return update_video(video_id, update_data)
 
 # -------------------------------------------------------------------
 # User API
@@ -737,6 +744,46 @@ async def update_user_profile(update_data: dict, user = Depends(get_current_user
     updated_profile = edit_user_profile(user["id"], update_data)
     if updated_profile:
         return updated_profile
+    return JSONResponse(status_code=400, content={"error": "Failed to update user profile"})
+
+@app.put("/users/me")
+async def update_user_profile(update_data: dict, user = Depends(get_current_user)):
+    
+    avatar_b64 = update_data.pop("avatar_base64", None)
+    
+    if avatar_b64:
+        try:
+            if "," in avatar_b64:
+                header, base64_str = avatar_b64.split(",", 1)
+                ext = header.split(";")[0].split("/")[1] # Extracts 'jpeg', 'png', etc.
+            else:
+                base64_str = avatar_b64
+                ext = "jpg"
+            
+            # Convert back to raw image bytes
+            image_bytes = base64.b64decode(base64_str)
+            
+            filename = f"{user['id']}_{uuid.uuid4().hex[:8]}.{ext}"
+            
+            # Upload directly to the Supabase storage bucket
+            supabase.storage.from_("avatars").upload(
+                path=filename,
+                file=image_bytes,
+                file_options={"content-type": f"image/{ext}"}
+            )
+            
+            public_url = supabase.storage.from_("avatars").get_public_url(filename)
+            update_data["image_uri"] = public_url
+            
+        except Exception as e:
+            print(f"Avatar upload failed: {e}")
+            return JSONResponse(status_code=500, content={"error": "Failed to upload avatar"})
+
+    updated_profile = edit_user_profile(user["id"], update_data)
+    
+    if updated_profile:
+        return updated_profile
+        
     return JSONResponse(status_code=400, content={"error": "Failed to update user profile"})
 
 #--------------------------------------------------

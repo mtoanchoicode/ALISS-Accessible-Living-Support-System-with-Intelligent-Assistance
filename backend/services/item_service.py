@@ -20,13 +20,14 @@ def get_item(item_id: str):
     response = supabase.table("items").select("*").eq("id", item_id).single().execute()
     return response.data
 
-def get_all_items():
-    """Fetches all items from the Supabase table."""
-    response = supabase.table("items")\
-        .select("*, categories(name)")\
-        .order("created_at", desc=True)\
-        .execute()
-    return response.data
+def get_all_items(user_id: str):
+    try:
+        # Add the .eq("user_id", user_id) filter!
+        response = supabase.table("items").select("*").eq("user_id", user_id).execute()
+        return response.data
+    except Exception as e:
+        print(f"Error fetching items: {e}")
+        return []
 
 # --------------------------------------------------
 # DELETE

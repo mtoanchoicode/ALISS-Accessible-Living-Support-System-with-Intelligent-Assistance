@@ -43,8 +43,6 @@ class PersonReIDRunner:
     def __init__(self, config: ReIDConfig) -> None:
         if not config.gallery_dir.exists():
             raise FileNotFoundError(f"Gallery folder not found: {config.gallery_dir}")
-        if not config.yolo_weights.exists():
-            raise FileNotFoundError(f"YOLO weights not found: {config.yolo_weights}")
 
         os.environ["TORCH_HOME"] = str(config.torch_home)
         self.config = config
