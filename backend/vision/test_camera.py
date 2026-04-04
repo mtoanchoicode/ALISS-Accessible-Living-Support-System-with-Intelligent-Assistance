@@ -167,7 +167,8 @@ def main():
                         room_name=location,
                         user_id="user",
                         timestamp=time.time(),
-                        save_path=GRAPH_SAVE_PATH
+                        save_path=GRAPH_SAVE_PATH,
+                        image_storage_dir="./memory_images"
                     )
                     print("✅ Saved to memory:", desc, "\n")
 

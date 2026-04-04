@@ -117,22 +117,37 @@ class HomeMemoryGraph:
         return (matches / comparable) * 100
     
     def _get_or_create_object(
-        self, name: str, attributes: Dict[str, Any], user_id: str, timestamp: float
+        self, name: str, attributes: Dict[str, Any], user_id: str, timestamp: float, room_nid: str = None
     ) -> str:
         """Core deduplication logic (replaces old _get_or_create_object)."""
         canonical_name = normalize_surface(name)
-        candidates = [
-            (nid, data)
-            for nid, data in self.graph.nodes(data=True)
-            if data.get("type") == "object" and data.get("name") == canonical_name
-        ]
+        candidates = []
+        for nid, data in self.graph.nodes(data=True):
+            if data.get("type") == "object" and data.get("name") == canonical_name:
+                
+                # Check 1: Find which room this existing object is in
+                current_room_of_object = None
+                for _, surface_target, edge_data in self.graph.out_edges(nid, data=True):
+                    if edge_data.get("relation") == "on":
+                        # Follow surface to room
+                        for _, room_target, room_edge in self.graph.out_edges(surface_target, data=True):
+                            if room_edge.get("relation") == "in":
+                                current_room_of_object = room_target
+                                break
+                
+                # Logic: Only allow candidate if it's in the SAME room or has NO room yet
+                if room_nid:
+                    if current_room_of_object == room_nid or current_room_of_object is None:
+                        candidates.append((nid, data))
+                else:
+                    candidates.append((nid, data))
 
         if not attributes:  # Nearby placeholder mode
             if candidates:
-                # Resolve to most recently seen instance
                 candidates.sort(key=lambda x: x[1].get("last_seen", 0), reverse=True)
                 return candidates[0][0]
-            # No existing → create placeholder
+            
+            # Create new placeholder
             self.object_instance_counters[canonical_name] += 1
             instance_num = self.object_instance_counters[canonical_name]
             nid = f"object::{canonical_name}::{instance_num}"
@@ -144,7 +159,7 @@ class HomeMemoryGraph:
                 seen_by=user_id,
             )
             return nid
-
+        
         # Full observation (has attributes) → deduplication
         if candidates:
             best_nid = None
@@ -189,11 +204,15 @@ class HomeMemoryGraph:
         return nid
     
     def _get_or_create_surface(self, surface_name: str, room_nid: str, user_id: str, timestamp: float) -> str:
-        nid = self.node_id(normalize_surface(surface_name), "surface")
+        normalized_name = normalize_surface(surface_name)
+    
+        # Use a composite ID: surface::room_id::surface_name
+        nid = f"surface::{room_nid}::{normalized_name}"
+        
         if nid not in self.graph:
             self.graph.add_node(nid, 
                                 type="surface", 
-                                name=normalize_surface(surface_name),
+                                name=normalized_name,
                                 added_by=user_id,
                                 created_at=timestamp)
             self.graph.add_edge(nid, room_nid, relation="in")
@@ -218,7 +237,7 @@ class HomeMemoryGraph:
 
         room_nid    = self._get_or_create_room(room_name)
         surface_nid = self._get_or_create_surface(surface, room_nid, user_id, timestamp)
-        obj_nid     = self._get_or_create_object(obj_name, attrs, user_id, timestamp)
+        obj_nid     = self._get_or_create_object(obj_name, attrs, user_id, timestamp, room_nid)
 
         # Object location
         self._clear_old_on_edges(obj_nid)
@@ -226,7 +245,11 @@ class HomeMemoryGraph:
 
         # Nearby objects (undirected next_to)
         for nb_name in nearby:
-            nb_nid = self._get_or_create_object(nb_name, {}, user_id, timestamp)   # ← empty = nearby mode
+            nb_nid = self._get_or_create_object(nb_name, {}, user_id, timestamp, room_nid)   # ← empty = nearby mode
+            has_surface = any(d.get("relation") == "on" for _, _, d in self.graph.out_edges(nb_nid, data=True))
+            if not has_surface:
+                self.graph.add_edge(nb_nid, surface_nid, relation="on")
+
             if not self.graph.has_edge(obj_nid, nb_nid):
                 self.graph.add_edge(obj_nid, nb_nid, relation="next_to")
             if not self.graph.has_edge(nb_nid, obj_nid):
