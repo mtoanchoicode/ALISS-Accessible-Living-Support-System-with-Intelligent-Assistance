@@ -62,8 +62,7 @@ export default function CameraView({
           }}
           onUserMedia={handleUserMedia}
           onLoadedMetadata={handleUserMedia}
-          onUserMediaError={handleUserMediaError}
-          className="w-full h-full object-contain"
+          className="w-full h-full object-cover" 
         />
         {isModelLoaded && videoDimensions.width > 0 && (
           <div className="absolute inset-0 flex items-center justify-center">

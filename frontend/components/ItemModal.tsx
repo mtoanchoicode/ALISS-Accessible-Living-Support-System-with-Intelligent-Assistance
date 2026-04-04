@@ -8,9 +8,10 @@ interface ItemModalProps {
   snapshotUrl: string | null;
   onClose: () => void;
   onSave: (item: Omit<RegisteredItem, 'id' | 'createdAt'>) => void;
+  defaultLocation?: string;
 }
 
-export default function ItemModal({ object, snapshotUrl, onClose, onSave }: ItemModalProps) {
+export default function ItemModal({ object, snapshotUrl, onClose, onSave, defaultLocation }: ItemModalProps) {
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
   const isMobile = useIsMobile();
@@ -18,9 +19,9 @@ export default function ItemModal({ object, snapshotUrl, onClose, onSave }: Item
   useEffect(() => {
     if (object) {
       setName(object.class.charAt(0).toUpperCase() + object.class.slice(1));
-      setCategory('General');
+      setCategory(defaultLocation || 'Living Room');
     }
-  }, [object]);
+  }, [object, defaultLocation]);
 
   if (!object) return null;
 
@@ -83,7 +84,7 @@ export default function ItemModal({ object, snapshotUrl, onClose, onSave }: Item
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5 ml-1">Category</label>
+                <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5 ml-1">Location</label>
                 <input
                   type="text"
                   required
@@ -91,7 +92,7 @@ export default function ItemModal({ object, snapshotUrl, onClose, onSave }: Item
                   onChange={(e) => setCategory(e.target.value)}
                   // Changed text-sm to text-base here too
                   className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all placeholder:text-zinc-600"
-                  placeholder="E.g., Electronics, Kitchen"
+                  placeholder="E.g., Living Room, Kitchen"
                 />
               </div>
             </form>
