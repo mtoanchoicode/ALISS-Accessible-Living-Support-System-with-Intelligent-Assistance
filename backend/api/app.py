@@ -252,21 +252,21 @@ def uploadfile_to_bgr_numpy_raw(data: bytes) -> np.ndarray:
 #     except Exception as e:
 #         return JSONResponse({"error": f"Memory creation failed: {e}"}, status_code=500)
     
-# def process_memory_v2_background(contents: bytes, obj_name: str, location: str, user_id: str, timestamp: float, image_storage_dir: str):
-#     try:
-#         pil_image = Image.open(io.BytesIO(contents)).convert("RGB")
-#         process_and_remember_observation(
-#             graph=memory,
-#             image=pil_image,
-#             object_name=obj_name,
-#             room_name=location,
-#             user_id=user_id,
-#             timestamp=timestamp,
-#             save_path=GRAPH_SAVE_PATH,
-#             image_storage_dir = image_storage_dir
-#         )
-#     except Exception as e:
-#         print(f"Background task (memoryv2) failed: {e}")
+def process_memory_v2_background(contents: bytes, obj_name: str, location: str, user_id: str, timestamp: float, image_storage_dir: str):
+    try:
+        pil_image = Image.open(io.BytesIO(contents)).convert("RGB")
+        process_and_remember_observation(
+            graph=memory,
+            image=pil_image,
+            object_name=obj_name,
+            room_name=location,
+            user_id=user_id,
+            timestamp=timestamp,
+            save_path=GRAPH_SAVE_PATH,
+            image_storage_dir = image_storage_dir
+        )
+    except Exception as e:
+        print(f"Background task (memoryv2) failed: {e}")
     
 @app.post("/memoryv2")
 def create_memory_v2(
@@ -382,7 +382,16 @@ def delete_graph_object(
         if nid not in memory.graph:
             return JSONResponse({"error": "Node not found"}, status_code=404)
 
+        # 1. Remove from memory
         memory.graph.remove_node(nid)
+
+        # 2. SAVE TO DISK (The missing step)
+        try:
+            # Assuming you have a save_graph function defined elsewhere
+            save_graph(memory, str(GRAPH_SAVE_PATH))
+        except Exception as save_error:
+            print(f"Warning: Node deleted in RAM but failed to save to disk: {save_error}")
+            # You might still return success, or throw an error depending on preference
 
         return {
             "status": "deleted",
@@ -391,7 +400,6 @@ def delete_graph_object(
 
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
-
 
 # -------------------------------------------------------------------
 # Chat (+ optional TTS in same response)
