@@ -35,7 +35,7 @@ export function useStorage(isChecking: boolean) {
     });
   };
 
-  const items = rawItems.map((i: any) => ({ ...i, type: "item" }));
+  const items = rawItems.map((i: any) => ({ ...i, type: "item", id: i.id }));
   const videos = rawVideos.map((v: any) => ({ ...v, type: "video" }));
 
   const isLoading = itemsLoading || videosLoading;
@@ -72,11 +72,32 @@ export function useStorage(isChecking: boolean) {
     }
   };
 
+  const handleDeleteItem = async (id: string) => {
+  if (window.confirm("Are you sure you want to delete this item?")) {
+      try {
+        await deleteItemMutation.mutateAsync(id);
+      } catch (err) {
+        console.error("Failed to delete item:", err);
+        alert("Error deleting item. Please try again.");
+      }
+    }
+  };
+
   const updateItemMutation = useMutation({
     mutationFn: ({ id, name }: { id: string; name: string }) =>
       itemService.updateItem(id, { name }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["items"] }),
   });
+
+  const deleteItemMutation = useMutation({
+  mutationFn: (id: string) => itemService.deleteItem(id),
+  onSuccess: () => {
+    // Invalidate the "items" query to refresh the list automatically
+    queryClient.invalidateQueries({ queryKey: ["items"] });
+    },
+  });
+
+
 
   const uploadItemMutation = useMutation({
     mutationFn: async ({ name, file }: { name: string; file: File }) => {
@@ -127,11 +148,12 @@ export function useStorage(isChecking: boolean) {
       console.error("Failed to upload item:", error);
       alert("Failed to upload item. Please try again.");
     }
+  };
 
-    const handleUploadVideo = async (name: string, file: File) => {
-      await uploadVideoMutation.mutateAsync({ name, file });
-      setIsUploadingVideo(false);
-    };
+  const handleUploadVideo = async (name: string, file: File) => {
+    await uploadVideoMutation.mutateAsync({ name, file });
+    setIsUploadingVideo(false);
+  };
 
     return {
       items,
@@ -155,6 +177,6 @@ export function useStorage(isChecking: boolean) {
       handleAddNewClick,
       handleSaveEdit,
       handleUploadVideo,
+      handleDeleteItem
     };
   };
-}

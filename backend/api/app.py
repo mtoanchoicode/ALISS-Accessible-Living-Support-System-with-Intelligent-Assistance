@@ -17,6 +17,7 @@ from PIL import Image
 from pydantic import BaseModel
 from services.auth_service import supabase 
 import time
+from fastapi.staticfiles import StaticFiles
 
 
 # Retrieval layer
@@ -210,6 +211,9 @@ class RegisterRequest(BaseModel):
 def health():
     return {"status": "ok", "model": OPENAI_MODEL}
 
+
+app.mount("/images", StaticFiles(directory="memory_images"), name="images")
+
 # -------------------------------------------------------------------
 # Context Builder
 # -------------------------------------------------------------------
@@ -226,43 +230,43 @@ def uploadfile_to_bgr_numpy_raw(data: bytes) -> np.ndarray:
     arr = np.array(img)
     return arr[..., ::-1].copy()
 
-@app.post("/memory")
-def create_memory(
-    background_tasks: BackgroundTasks,
-    obj_name: str = Form(...),
-    location: str = Form(...),
-    image: UploadFile = File(...),
-    model: str = Form("gpt-4o"),
-    user = Depends(get_current_user),
-):
-    try:
-        contents = image.file.read()
-        background_tasks.add_task(
-            process_memory_background,
-            contents=contents,
-            obj_name=obj_name,
-            location=location,
-            model=model
-        )
-        return JSONResponse({"status": "Processing Memory", "message": "Image queued"}, status_code=202)
-    except Exception as e:
-        return JSONResponse({"error": f"Memory creation failed: {e}"}, status_code=500)
+# @app.post("/memory")
+# def create_memory(
+#     background_tasks: BackgroundTasks,
+#     obj_name: str = Form(...),
+#     location: str = Form(...),
+#     image: UploadFile = File(...),
+#     model: str = Form("gpt-4o"),
+#     user = Depends(get_current_user),
+# ):
+#     try:
+#         contents = image.file.read()
+#         background_tasks.add_task(
+#             process_memory_background,
+#             contents=contents,
+#             obj_name=obj_name,
+#             location=location,
+#             model=model
+#         )
+#         return JSONResponse({"status": "Processing Memory", "message": "Image queued"}, status_code=202)
+#     except Exception as e:
+#         return JSONResponse({"error": f"Memory creation failed: {e}"}, status_code=500)
     
-def process_memory_v2_background(contents: bytes, obj_name: str, location: str, user_id: str, timestamp: float, image_storage_dir: str):
-    try:
-        pil_image = Image.open(io.BytesIO(contents)).convert("RGB")
-        process_and_remember_observation(
-            graph=memory,
-            image=pil_image,
-            object_name=obj_name,
-            room_name=location,
-            user_id=user_id,
-            timestamp=timestamp,
-            save_path=GRAPH_SAVE_PATH,
-            image_storage_dir = image_storage_dir
-        )
-    except Exception as e:
-        print(f"Background task (memoryv2) failed: {e}")
+# def process_memory_v2_background(contents: bytes, obj_name: str, location: str, user_id: str, timestamp: float, image_storage_dir: str):
+#     try:
+#         pil_image = Image.open(io.BytesIO(contents)).convert("RGB")
+#         process_and_remember_observation(
+#             graph=memory,
+#             image=pil_image,
+#             object_name=obj_name,
+#             room_name=location,
+#             user_id=user_id,
+#             timestamp=timestamp,
+#             save_path=GRAPH_SAVE_PATH,
+#             image_storage_dir = image_storage_dir
+#         )
+#     except Exception as e:
+#         print(f"Background task (memoryv2) failed: {e}")
     
 @app.post("/memoryv2")
 def create_memory_v2(
@@ -296,15 +300,37 @@ def create_memory_v2(
 @app.get("/memoryv2/objects")
 def list_graph_objects(user = Depends(get_current_user)):
     try:
-        objects = [
-            {
-                "id": nid,
-                **data
-            }
-            for nid, data in memory.graph.nodes(data=True)
-            if data.get("type") == "object"
-        ]
-        return {"count": len(objects), "objects": objects}
+        results = []
+        
+        # 1. Iterate through all nodes labeled as 'object'
+        for nid, data in memory.graph.nodes(data=True):
+            if data.get("type") == "object":
+                obj_info = {
+                    "id": nid,
+                    "location": {"surface": "unknown", "room": "unknown"}
+                }
+                obj_info.update({k: v for k, v in data.items() if k not in ["type"]})
+
+                # 2. Traverse Graph: Find Surface (Object --on--> Surface)
+                for _, surface_nid, edge_data in memory.graph.out_edges(nid, data=True):
+                    if edge_data.get("relation") == "on":
+                        surface_data = memory.graph.nodes.get(surface_nid, {})
+                        obj_info["location"]["surface"] = surface_data.get("name", "unknown")
+                        
+                        # 3. Traverse Graph: Find Room (Surface --in--> Room)
+                        for _, room_nid, room_edge_data in memory.graph.out_edges(surface_nid, data=True):
+                            if room_edge_data.get("relation") == "in":
+                                room_data = memory.graph.nodes.get(room_nid, {})
+                                obj_info["location"]["room"] = room_data.get("name", "unknown")
+                                break # Found the room
+                        break # Found the surface
+                
+                results.append(obj_info)
+
+        return {
+            "count": len(results), 
+            "objects": results
+        }
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
     
