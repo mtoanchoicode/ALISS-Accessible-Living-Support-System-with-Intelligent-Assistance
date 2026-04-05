@@ -54,6 +54,7 @@ try:
         retrieve_facts_hybrid,
         llm_answer,
         update_state,
+        update_history, 
     )
 except ImportError as e:
     print(f"CRITICAL: Missing module or import error: {e}")
@@ -497,7 +498,6 @@ def chats_v2(body: ChatV2Request):
     state = SEARCH_V2_SESSIONS[session_id]
 
     try:
-        # 1. Retrieve từ graph + embedding + OpenAI parse
         facts = retrieve_facts_hybrid(
             retriever=search_v2_retriever,
             resolver=search_v2_resolver,
@@ -505,11 +505,10 @@ def chats_v2(body: ChatV2Request):
             state=state,
         )
 
-        # 2. Generate answer bằng OpenAI
-        answer = llm_answer(user_msg, facts)
+        answer = llm_answer(user_msg, facts, state)
 
-        # 3. Update conversation state
         update_state(state, facts)
+        update_history(state, user_msg, answer)
 
         return {
             "session_id": session_id,
@@ -520,7 +519,7 @@ def chats_v2(body: ChatV2Request):
     except Exception as e:
         return JSONResponse(
             {"error": f"chats_v2 failed: {str(e)}"},
-            status_code=500
+            status_code=500,
         )
 
 # -------------------------------------------------------------------
