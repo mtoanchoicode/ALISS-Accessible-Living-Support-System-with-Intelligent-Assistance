@@ -2,8 +2,10 @@ import { apiClient } from "./apiClient";
 import { StorageItem } from "../types";
 
 export const itemService = {
-  getAllItems: (): Promise<StorageItem[]> => {
-    return apiClient("/items");
+  getAllItems: async () => {
+    const data = await apiClient("/memoryv2/objects");
+    // We return the 'objects' array specifically to keep the hook logic clean
+    return data.objects || [];
   },
 
   getItem: (id: string): Promise<StorageItem> => {
@@ -17,16 +19,22 @@ export const itemService = {
     });
   },
 
-  updateItem: (id: string, data: Partial<StorageItem>): Promise<StorageItem> => {
-    return apiClient(`/items/${id}`, {
+  updateItem: (id: string, updates: any): Promise<any> => {
+    return apiClient("/memoryv2/object", {
       method: "PUT",
-      body: JSON.stringify(data),
+      body: JSON.stringify({
+        node_id: id,
+        updates: updates,
+      }),
     });
   },
 
   deleteItem: (id: string): Promise<any> => {
-    return apiClient(`/items/${id}`, {
+    return apiClient(`/memoryv2/object`, {
       method: "DELETE",
+      body: JSON.stringify({
+        node_id: id,
+      }),
     });
   }
 };

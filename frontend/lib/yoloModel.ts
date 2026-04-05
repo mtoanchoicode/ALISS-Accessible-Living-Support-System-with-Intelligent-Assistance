@@ -64,7 +64,7 @@ export async function detectObjects(
     scores as tf.Tensor1D,
     30,      // Max Output Size
     0.45,    // IOU Threshold
-    0.50,    // Score Threshold (lowered slightly for custom fine-tuned model)
+    0.30,    // Score Threshold (lowered slightly for custom fine-tuned model)
   );
 
   // 5. Move to CPU
@@ -84,23 +84,26 @@ export async function detectObjects(
 
   // 8. Map to DetectedObject array
   return (indices as number[])
-    .map((idx) => {
-      const classId = (cData as number[])[idx];
-      if (classId < 24 || classId > 80) return null;
+  .map((idx) => {
+    const classId = (cData as number[])[idx];
+    const score = (sData as number[])[idx];
 
-      const [y1, x1, y2, x2] = (bData as number[][])[idx];
-      
-      return {
-        id: `det-${Date.now()}-${idx}`,
-        class: COCO_LABELS[classId],
-        score: (sData as number[])[idx],
-        bbox: {
-          x: x1 * widthRatio,
-          y: y1 * heightRatio,
-          width: (x2 - x1) * widthRatio,
-          height: (y2 - y1) * heightRatio,
-        },
-      };
-    })
-    .filter((item): item is DetectedObject => item !== null);
+    // TEMPORARY: Allow all classes to see if it's working
+    if (classId < 24 || classId > 80) return null;
+
+    const [y1, x1, y2, x2] = (bData as number[][])[idx];
+    
+    return {
+      id: `det-${Date.now()}-${idx}`,
+      class: COCO_LABELS[classId] || `ID: ${classId}`,
+      score: score,
+      bbox: {
+        x: x1 * widthRatio,
+        y: y1 * heightRatio,
+        width: (x2 - x1) * widthRatio,
+        height: (y2 - y1) * heightRatio,
+      },
+    };
+  })
+  .filter((item): item is DetectedObject => item !== null);
 }

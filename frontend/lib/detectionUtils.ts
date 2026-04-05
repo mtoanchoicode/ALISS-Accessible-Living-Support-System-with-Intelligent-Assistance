@@ -16,7 +16,7 @@ export function captureSnapshot(
 ): string {
   const canvas = document.createElement("canvas");
   // Add some padding
-  const padding = 20;
+  const padding = 50;
   const sx = Math.max(0, box.x - padding);
   const sy = Math.max(0, box.y - padding);
   const sw = Math.min(video.videoWidth - sx, box.width + padding * 2);

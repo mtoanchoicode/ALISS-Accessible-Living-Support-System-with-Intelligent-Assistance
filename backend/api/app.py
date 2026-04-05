@@ -17,6 +17,7 @@ from PIL import Image
 from pydantic import BaseModel
 from services.auth_service import supabase 
 import time
+from fastapi.staticfiles import StaticFiles
 
 
 # Retrieval layer
@@ -211,6 +212,9 @@ class RegisterRequest(BaseModel):
 def health():
     return {"status": "ok", "model": OPENAI_MODEL}
 
+
+app.mount("/images", StaticFiles(directory="memory_images"), name="images")
+
 # -------------------------------------------------------------------
 # Context Builder
 # -------------------------------------------------------------------
@@ -227,27 +231,27 @@ def uploadfile_to_bgr_numpy_raw(data: bytes) -> np.ndarray:
     arr = np.array(img)
     return arr[..., ::-1].copy()
 
-@app.post("/memory")
-def create_memory(
-    background_tasks: BackgroundTasks,
-    obj_name: str = Form(...),
-    location: str = Form(...),
-    image: UploadFile = File(...),
-    model: str = Form("gpt-4o"),
-    user = Depends(get_current_user),
-):
-    try:
-        contents = image.file.read()
-        background_tasks.add_task(
-            process_memory_background,
-            contents=contents,
-            obj_name=obj_name,
-            location=location,
-            model=model
-        )
-        return JSONResponse({"status": "Processing Memory", "message": "Image queued"}, status_code=202)
-    except Exception as e:
-        return JSONResponse({"error": f"Memory creation failed: {e}"}, status_code=500)
+# @app.post("/memory")
+# def create_memory(
+#     background_tasks: BackgroundTasks,
+#     obj_name: str = Form(...),
+#     location: str = Form(...),
+#     image: UploadFile = File(...),
+#     model: str = Form("gpt-4o"),
+#     user = Depends(get_current_user),
+# ):
+#     try:
+#         contents = image.file.read()
+#         background_tasks.add_task(
+#             process_memory_background,
+#             contents=contents,
+#             obj_name=obj_name,
+#             location=location,
+#             model=model
+#         )
+#         return JSONResponse({"status": "Processing Memory", "message": "Image queued"}, status_code=202)
+#     except Exception as e:
+#         return JSONResponse({"error": f"Memory creation failed: {e}"}, status_code=500)
     
 def process_memory_v2_background(contents: bytes, obj_name: str, location: str, user_id: str, timestamp: float, image_storage_dir: str):
     try:
@@ -297,15 +301,37 @@ def create_memory_v2(
 @app.get("/memoryv2/objects")
 def list_graph_objects(user = Depends(get_current_user)):
     try:
-        objects = [
-            {
-                "id": nid,
-                **data
-            }
-            for nid, data in memory.graph.nodes(data=True)
-            if data.get("type") == "object"
-        ]
-        return {"count": len(objects), "objects": objects}
+        results = []
+        
+        # 1. Iterate through all nodes labeled as 'object'
+        for nid, data in memory.graph.nodes(data=True):
+            if data.get("type") == "object":
+                obj_info = {
+                    "id": nid,
+                    "location": {"surface": "unknown", "room": "unknown"}
+                }
+                obj_info.update({k: v for k, v in data.items() if k not in ["type"]})
+
+                # 2. Traverse Graph: Find Surface (Object --on--> Surface)
+                for _, surface_nid, edge_data in memory.graph.out_edges(nid, data=True):
+                    if edge_data.get("relation") == "on":
+                        surface_data = memory.graph.nodes.get(surface_nid, {})
+                        obj_info["location"]["surface"] = surface_data.get("name", "unknown")
+                        
+                        # 3. Traverse Graph: Find Room (Surface --in--> Room)
+                        for _, room_nid, room_edge_data in memory.graph.out_edges(surface_nid, data=True):
+                            if room_edge_data.get("relation") == "in":
+                                room_data = memory.graph.nodes.get(room_nid, {})
+                                obj_info["location"]["room"] = room_data.get("name", "unknown")
+                                break # Found the room
+                        break # Found the surface
+                
+                results.append(obj_info)
+
+        return {
+            "count": len(results), 
+            "objects": results
+        }
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
     
@@ -357,7 +383,16 @@ def delete_graph_object(
         if nid not in memory.graph:
             return JSONResponse({"error": "Node not found"}, status_code=404)
 
+        # 1. Remove from memory
         memory.graph.remove_node(nid)
+
+        # 2. SAVE TO DISK (The missing step)
+        try:
+            # Assuming you have a save_graph function defined elsewhere
+            save_graph(memory, str(GRAPH_SAVE_PATH))
+        except Exception as save_error:
+            print(f"Warning: Node deleted in RAM but failed to save to disk: {save_error}")
+            # You might still return success, or throw an error depending on preference
 
         return {
             "status": "deleted",
@@ -366,7 +401,6 @@ def delete_graph_object(
 
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
-
 
 # -------------------------------------------------------------------
 # Chat (+ optional TTS in same response)
@@ -602,9 +636,42 @@ async def read_all_items(user: dict = Depends(get_current_user)):
     # Pass the user's ID to the service function
     return fetch_items(user["id"])
 
-@app.post("/items")
-async def create_new_item(item_data: dict, user = Depends(get_current_user)):
-    return create_item(item_data)
+# @app.post("/items")
+# async def create_new_item(item_data: dict, user = Depends(get_current_user)):
+#     image_b64 = item_data.pop("image_base64", None)
+    
+#     item_data["user_id"] = user["id"]
+    
+#     if image_b64:
+#         try:
+#             if "," in image_b64:
+#                 header, base64_str = image_b64.split(",", 1)
+#                 ext = header.split(";")[0].split("/")[1]
+#             else:
+#                 base64_str = image_b64
+#                 ext = "jpg"
+            
+#             image_bytes = base64.b64decode(base64_str)
+            
+#             filename = f"item_{user['id']}_{uuid.uuid4().hex[:8]}.{ext}"
+            
+#             # Upload to a Supabase bucket named 'items'
+#             supabase.storage.from_("items").upload(
+#                 path=filename,
+#                 file=image_bytes,
+#                 file_options={"content-type": f"image/{ext}"}
+#             )
+            
+#             # Get the URL and attach it to the database payload
+#             public_url = supabase.storage.from_("items").get_public_url(filename)
+#             item_data["image_uri"] = public_url
+            
+#         except Exception as e:
+#             print(f"Item image upload failed: {e}")
+#             return JSONResponse(status_code=500, content={"error": "Failed to upload item image"})
+
+#     # 2. Save to the database
+#     return create_item(item_data)
 
 @app.delete("/items/{item_id}")
 async def remove_item(item_id: str, user = Depends(get_current_user)):
