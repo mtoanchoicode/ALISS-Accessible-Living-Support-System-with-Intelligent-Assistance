@@ -1,14 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Webcam from "react-webcam";
 import { loadModel, detectObjects } from "@/lib/yoloModel";
-import { DetectedObject, RegisteredItem } from "@/types/detection";
-import { captureSnapshot, captureFullSnapshot } from "@/lib/detectionUtils";
-import { saveRegisteredItem } from "@/lib/storageUtils";
+import { DetectedObject, ItemSavePayload } from "@/types/detection";
+import { captureSnapshot } from "@/lib/detectionUtils";
 import { visionService } from "@/services/visionService";
-import { itemService } from "@/services/itemService";
 
 export function useCamera() {
-  // --- Global Camera Controls ---
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [selectedObject, setSelectedObject] = useState<DetectedObject | null>(
@@ -60,32 +57,6 @@ export function useCamera() {
     requestRef.current = requestAnimationFrame(detectFrame);
     return () => cancelAnimationFrame(requestRef.current);
   }, [detectFrame]);
-  
-  // --- Background Context Builder (MemoryV2) ---
-  // useEffect(() => {
-  //   if (!isCameraActive || isRecording) return; // Pause context building while explicitly recording video
-
-  //   const timer = setInterval(async () => {
-  //     const video = webcamRef.current?.video;
-  //     if (!video) return;
-
-  //     try {
-  //       const uniqueNames = Array.from(new Set(objectsRef.current.map(o => o.class)));
-  //       const objNameStr = uniqueNames.length > 0 ? uniqueNames.join(", ") : "background";
-
-  //       const snap = captureFullSnapshot(video); // takes full frame snapshot
-  //       const res = await fetch(snap);
-  //       const blob = await res.blob();
-  //       const file = new File([blob], `context_${Date.now()}.jpg`, { type: "image/jpeg" });
-
-  //       await visionService.createMemoryV2(objNameStr, selectedRoom, file);
-  //     } catch (err) {
-  //       console.error("Context builder failed", err);
-  //     }
-  //   }, 4000);
-
-  //   return () => clearInterval(timer);
-  // }, [isCameraActive, isRecording, selectedRoom]);
 
   // --- Utility & Event Handlers ---
   const handleUserMedia = () => {
@@ -102,7 +73,7 @@ export function useCamera() {
     setError(`Camera error: ${err.toString()}`);
   };
 
-  // --- Recording Logic (from useCameraControls) ---
+  // --- Recording Logic ---
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (isRecording) {
@@ -131,43 +102,34 @@ export function useCamera() {
     setSnapshotUrl(snap);
   };
 
-  const handleSaveItem = async (
-    itemData: Omit<RegisteredItem, "id" | "createdAt">,
-  ) => {
-    saveRegisteredItem(itemData);
+  const handleSaveItem = async (itemData: ItemSavePayload) => {
+    if (!snapshotUrl) {
+      console.error("No snapshot available to save.");
+      return;
+    }
 
     try {
-      await itemService.createItem({
-        name: itemData.name,
-        location: itemData.category,
-        image_base64: itemData.snapshotUrl,
-      } as any);
+      // 1. Convert the Base64 snapshot into a raw File object
+      const res = await fetch(snapshotUrl);
+      const blob = await res.blob();
 
-      if (itemData.snapshotUrl) {
-        try {
-          const res = await fetch(itemData.snapshotUrl);
-          const blob = await res.blob();
-          const file = new File([blob], `${itemData.name}.jpg`, {
-            type: "image/jpeg",
-          });
+      // Clean up the filename (e.g. "Coffee Mug" -> "Coffee_Mug.jpg")
+      const safeFilename = `${itemData.name.replace(/\s+/g, "_")}.jpg`;
+      const file = new File([blob], safeFilename, { type: "image/jpeg" });
 
-          visionService
-            .createMemoryV2(
-              itemData.name,
-              itemData.category || "Unknown Location",
-              file,
-            )
-            .catch((e) => console.error("Vision Processing Sync Failed:", e));
-        } catch (err) {
-          console.error("Failed to construct image blob bounds: ", err);
-        }
-      }
+      // 2. Call the memory v2 API directly (which uses FormData)
+      await visionService.createMemoryV2(
+        itemData.name,
+        itemData.location,
+        file,
+      );
 
+      // 3. Success! Close modal and resume camera
       setSelectedObject(null);
       setSnapshotUrl(null);
       setIsCameraActive(true);
     } catch (e) {
-      console.error("Failed to post to backend DB items collection:", e);
+      console.error("Failed to process memory via v2 API:", e);
       throw e;
     }
   };
@@ -176,20 +138,6 @@ export function useCamera() {
     setSelectedObject(null);
     setSnapshotUrl(null);
     setIsCameraActive(true);
-  };
-
-  const toggleFullScreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch((err) => {
-        console.warn(`Error attempting to enable fullscreen: ${err.message}`);
-      });
-    } else {
-      document.exitFullscreen();
-    }
-  };
-
-  const toggleFacingMode = () => {
-    setFacingMode((prev) => (prev === "environment" ? "user" : "environment"));
   };
 
   const toggleCameraActive = () => {
@@ -210,10 +158,8 @@ export function useCamera() {
     recordingTime,
     toggleRecording,
     facingMode,
-    toggleFacingMode,
     isCameraActive,
     toggleCameraActive,
-    toggleFullScreen,
     selectedRoom,
     setSelectedRoom,
     // Storage Mappings

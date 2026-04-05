@@ -16,16 +16,22 @@ export interface RegisteredItem {
   id: string;
   name: string;
   category: string;
+  location: string;
   label: string;
   confidence: number;
   snapshotUrl: string;
   createdAt: number;
 }
 
+export interface ItemSavePayload {
+  name: string;
+  location: string;
+}
+
 export interface ItemModalProps {
   object: DetectedObject | null;
   snapshotUrl: string | null;
   onClose: () => void;
-  onSave: (item: Omit<RegisteredItem, "id" | "createdAt">) => void;
+  onSave: (data: ItemSavePayload) => Promise<void>;
   defaultLocation?: string;
 }

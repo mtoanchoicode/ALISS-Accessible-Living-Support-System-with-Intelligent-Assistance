@@ -629,42 +629,42 @@ async def read_all_items(user: dict = Depends(get_current_user)):
     # Pass the user's ID to the service function
     return fetch_items(user["id"])
 
-@app.post("/items")
-async def create_new_item(item_data: dict, user = Depends(get_current_user)):
-    image_b64 = item_data.pop("image_base64", None)
+# @app.post("/items")
+# async def create_new_item(item_data: dict, user = Depends(get_current_user)):
+#     image_b64 = item_data.pop("image_base64", None)
     
-    item_data["user_id"] = user["id"]
+#     item_data["user_id"] = user["id"]
     
-    if image_b64:
-        try:
-            if "," in image_b64:
-                header, base64_str = image_b64.split(",", 1)
-                ext = header.split(";")[0].split("/")[1]
-            else:
-                base64_str = image_b64
-                ext = "jpg"
+#     if image_b64:
+#         try:
+#             if "," in image_b64:
+#                 header, base64_str = image_b64.split(",", 1)
+#                 ext = header.split(";")[0].split("/")[1]
+#             else:
+#                 base64_str = image_b64
+#                 ext = "jpg"
             
-            image_bytes = base64.b64decode(base64_str)
+#             image_bytes = base64.b64decode(base64_str)
             
-            filename = f"item_{user['id']}_{uuid.uuid4().hex[:8]}.{ext}"
+#             filename = f"item_{user['id']}_{uuid.uuid4().hex[:8]}.{ext}"
             
-            # Upload to a Supabase bucket named 'items'
-            supabase.storage.from_("items").upload(
-                path=filename,
-                file=image_bytes,
-                file_options={"content-type": f"image/{ext}"}
-            )
+#             # Upload to a Supabase bucket named 'items'
+#             supabase.storage.from_("items").upload(
+#                 path=filename,
+#                 file=image_bytes,
+#                 file_options={"content-type": f"image/{ext}"}
+#             )
             
-            # Get the URL and attach it to the database payload
-            public_url = supabase.storage.from_("items").get_public_url(filename)
-            item_data["image_uri"] = public_url
+#             # Get the URL and attach it to the database payload
+#             public_url = supabase.storage.from_("items").get_public_url(filename)
+#             item_data["image_uri"] = public_url
             
-        except Exception as e:
-            print(f"Item image upload failed: {e}")
-            return JSONResponse(status_code=500, content={"error": "Failed to upload item image"})
+#         except Exception as e:
+#             print(f"Item image upload failed: {e}")
+#             return JSONResponse(status_code=500, content={"error": "Failed to upload item image"})
 
-    # 2. Save to the database
-    return create_item(item_data)
+#     # 2. Save to the database
+#     return create_item(item_data)
 
 @app.delete("/items/{item_id}")
 async def remove_item(item_id: str, user = Depends(get_current_user)):

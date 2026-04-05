@@ -45,6 +45,7 @@ export function useStorage(isChecking: boolean) {
   const [activeTab, setActiveTab] = useState<"items" | "videos">("items");
   const [searchQuery, setSearchQuery] = useState("");
   const currentSource = activeTab === "items" ? items : videos;
+
   const filteredItems = currentSource.filter((item: any) => {
     return item.name?.toLowerCase().includes(searchQuery.toLowerCase());
   });
@@ -54,6 +55,7 @@ export function useStorage(isChecking: boolean) {
     name: string;
     type: "item" | "video";
   } | null>(null);
+
   const [isUploadingVideo, setIsUploadingVideo] = useState(false);
 
   const handleEditClick = (
@@ -66,7 +68,8 @@ export function useStorage(isChecking: boolean) {
 
   const handleAddNewClick = () => {
     if (activeTab === "items") {
-      alert("Adding items flow to be implemented.");
+      // Items should be added via the AI Camera!
+      alert("Please go to the Camera tab to scan and register new items.");
     } else {
       setIsUploadingVideo(true);
     }
@@ -140,43 +143,33 @@ export function useStorage(isChecking: boolean) {
     setEditingItem(null);
   };
 
-  const handleUploadItem = async (name: string, file: File) => {
-    try {
-      await uploadItemMutation.mutateAsync({ name, file });
-      setIsUploadingVideo(false); // Closes your modal
-    } catch (error) {
-      console.error("Failed to upload item:", error);
-      alert("Failed to upload item. Please try again.");
-    }
-  };
-
   const handleUploadVideo = async (name: string, file: File) => {
     await uploadVideoMutation.mutateAsync({ name, file });
     setIsUploadingVideo(false);
   };
 
-    return {
-      items,
-      videos,
-      isLoading,
-      error,
-      refetch: () => {
-        queryClient.invalidateQueries({ queryKey: ["items"] });
-        queryClient.invalidateQueries({ queryKey: ["videos"] });
-      },
-      activeTab,
-      setActiveTab,
-      searchQuery,
-      setSearchQuery,
-      filteredItems,
-      editingItem,
-      setEditingItem,
-      isUploadingVideo,
-      setIsUploadingVideo,
-      handleEditClick,
-      handleAddNewClick,
-      handleSaveEdit,
-      handleUploadVideo,
-      handleDeleteItem
-    };
+  return {
+    items,
+    videos,
+    isLoading,
+    error,
+    refetch: () => {
+      queryClient.invalidateQueries({ queryKey: ["items"] });
+      queryClient.invalidateQueries({ queryKey: ["videos"] });
+    },
+    activeTab,
+    setActiveTab,
+    searchQuery,
+    setSearchQuery,
+    filteredItems,
+    editingItem,
+    setEditingItem,
+    isUploadingVideo,
+    setIsUploadingVideo,
+    handleEditClick,
+    handleAddNewClick,
+    handleSaveEdit,
+    handleUploadVideo,
+    handleDeleteItem
   };
+}

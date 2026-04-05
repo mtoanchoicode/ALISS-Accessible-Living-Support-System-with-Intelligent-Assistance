@@ -6,6 +6,7 @@ export type StorageItem = {
   image_uri: string;
   created_at: string;
   type: "item";
+  location: string;
   categories?: { name: string };
 };
 
@@ -28,4 +29,3 @@ export type UserProfile = {
   phone: string;
   image_uri: string;
 };
-
