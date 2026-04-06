@@ -11,7 +11,7 @@ export const itemService = {
   },
 
   createItem: (data: Partial<StorageItem>): Promise<StorageItem> => {
-    return apiClient("/items", {
+    return apiClient("/memoryv2", {
       method: "POST",
       body: JSON.stringify(data),
     });
