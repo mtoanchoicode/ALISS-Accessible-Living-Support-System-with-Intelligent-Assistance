@@ -558,6 +558,7 @@ def retrieve_with_graph(
             "last_seen": loc.get("last_seen"),
             "room": loc.get("room"),
             "surface": loc.get("surface"),
+            "seen_by": loc.get("seen_by"),
         }
 
     if intent == "attributes" and entity_name:
@@ -835,6 +836,10 @@ Retrieved graph facts (JSON):
 Instructions:
 - Be concise: 1 to 3 sentences.
 - Prefer natural wording.
+- Address the user directly (for example, use "you" / "your" when natural).
+- If the retrieved facts include who saw or interacted with the object (for example "seen_by"), mention that clearly.
+- Use active voice and conversational phrasing.
+- Avoid robotic wording like "It was seen by you"; prefer natural phrasing like "You last saw your bottle...".
 - Do not mention implementation details like regex, embeddings, graph traversal, or JSON.
 - If there is no reliable answer, do not guess.
 """.strip()
