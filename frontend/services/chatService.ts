@@ -10,21 +10,31 @@ export const chatService = {
     return apiClient(`/chats/${sessionId}/messages`, { method: "GET" });
   },
 
-  chat: async (sessionId: string | null, message: string, k: number = 5, withTts: boolean = false, ttsVoice?: string) => {
-    return apiClient("/chat", {
+  createSession: async (): Promise<{ session_id: string }> => {
+    return apiClient(`/chats/session`, {
+      method: "POST",
+    });
+  },
+
+  deleteSession: async (sessionId: string) => {
+    return apiClient(`/chats/${sessionId}`, {
+      method: "DELETE",
+    });
+  },
+
+  chatV2: async (sessionId: string, message: string) => {
+    return apiClient("/chats_v2", {
       method: "POST",
       body: JSON.stringify({
         session_id: sessionId,
-        message,
-        k,
-        with_tts: withTts,
-        tts_voice: ttsVoice
+        message: message,
       }),
     });
   },
 
   speech: async (text: string, voice?: string) => {
-    const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://172.16.1.236:8000";
+    const BASE_URL =
+      process.env.NEXT_PUBLIC_API_URL || "http://172.16.1.236:8000";
     const response = await fetch(`${BASE_URL}/speech`, {
       method: "POST",
       headers: {
@@ -32,11 +42,11 @@ export const chatService = {
       },
       body: JSON.stringify({ text, voice }),
     });
-    
+
     if (!response.ok) {
-        throw new Error("Failed to generate speech audio");
+      throw new Error("Failed to generate speech audio");
     }
     // Return the Mp3 bytes blob
-    return response.blob(); 
-  }
+    return response.blob();
+  },
 };

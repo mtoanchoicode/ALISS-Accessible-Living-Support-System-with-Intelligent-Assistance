@@ -9,7 +9,6 @@ export default function BottomNav() {
 
   const navItems = [
     { name: "Home", href: "/home", icon: Home },
-    { name: "Live", href: "/live", icon: Video },
     { name: "Camera", href: "/camera", icon: Camera, isMain: true },
     { name: "Chat", href: "/chat", icon: MessageSquare },
     { name: "Storage", href: "/storage", icon: Database },
@@ -26,22 +25,6 @@ export default function BottomNav() {
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href;
-
-          if (item.isMain) {
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                className={`relative -top-5 flex flex-col items-center justify-center w-14 h-14 rounded-full shadow-lg transition-colors border-4 border-white ${
-                  isActive 
-                    ? "bg-[#3F62C7] shadow-[#3F62C7]/40" 
-                    : "bg-[#3F62C7] shadow-[#3F62C7]/30 hover:bg-[#3F62C7]"
-                } text-white`}
-              >
-                <Icon className="w-6 h-6" strokeWidth={2.5} />
-              </Link>
-            );
-          }
 
           return (
             <Link

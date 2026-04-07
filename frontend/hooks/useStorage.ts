@@ -69,19 +69,21 @@ export function useStorage(isChecking: boolean) {
   const handleAddNewClick = () => {
     if (activeTab === "items") {
       // Items should be added via the AI Camera!
-      alert("Please go to the Camera tab to scan and register new items.");
+      console.log(
+        "Please go to the Camera tab to scan and register new items.",
+      );
     } else {
       setIsUploadingVideo(true);
     }
   };
 
   const handleDeleteItem = async (id: string) => {
-  if (window.confirm("Are you sure you want to delete this item?")) {
+    if (window.confirm("Are you sure you want to delete this item?")) {
       try {
         await deleteItemMutation.mutateAsync(id);
       } catch (err) {
         console.error("Failed to delete item:", err);
-        alert("Error deleting item. Please try again.");
+        console.log("Error deleting item. Please try again.");
       }
     }
   };
@@ -93,14 +95,12 @@ export function useStorage(isChecking: boolean) {
   });
 
   const deleteItemMutation = useMutation({
-  mutationFn: (id: string) => itemService.deleteItem(id),
-  onSuccess: () => {
-    // Invalidate the "items" query to refresh the list automatically
-    queryClient.invalidateQueries({ queryKey: ["items"] });
+    mutationFn: (id: string) => itemService.deleteItem(id),
+    onSuccess: () => {
+      // Invalidate the "items" query to refresh the list automatically
+      queryClient.invalidateQueries({ queryKey: ["items"] });
     },
   });
-
-
 
   const uploadItemMutation = useMutation({
     mutationFn: async ({ name, file }: { name: string; file: File }) => {
@@ -170,6 +170,6 @@ export function useStorage(isChecking: boolean) {
     handleAddNewClick,
     handleSaveEdit,
     handleUploadVideo,
-    handleDeleteItem
+    handleDeleteItem,
   };
 }
