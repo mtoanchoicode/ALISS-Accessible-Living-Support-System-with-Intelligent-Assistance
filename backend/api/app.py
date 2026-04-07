@@ -45,7 +45,7 @@ try:
     )
     # Chat DB API
     from services.chat_service import (
-        get_user_sessions, create_session, get_session_messages, save_message, update_session_title
+        get_user_sessions, create_session, get_session_messages, save_message, update_session_title, delete_session
     )
 
     from query.search_v2 import (
@@ -405,16 +405,9 @@ def delete_graph_object(
 # -------------------------------------------------------------------
 # Chat (+ optional TTS in same response)
 # -------------------------------------------------------------------
-@app.get("/chats")
-def list_chats(user = Depends(get_current_user)):
-    return get_user_sessions(user["id"])
 
-@app.get("/chats/{session_id}/messages")
-def list_chat_messages(session_id: str, user = Depends(get_current_user)):
-    return get_session_messages(session_id)
-
-@app.post("/chat")
-def chat(body: ChatRequest, user = Depends(get_current_user)):
+# @app.post("/chat")
+# def chat(body: ChatRequest, user = Depends(get_current_user)):
     user_msg = body.message.strip()
     k = body.k
 
@@ -509,7 +502,7 @@ def chat(body: ChatRequest, user = Depends(get_current_user)):
     }
 
 # -------------------------------------------------------------------
-# Chat (+ optional TTS in same response)
+# Chat v2 (+ optional TTS in same response)
 # -------------------------------------------------------------------
 search_v2_memory = load_graph(Path(GRAPH_SAVE_PATH))
 search_v2_retriever = GraphMemoryRetriever(search_v2_memory)
@@ -522,12 +515,14 @@ class ChatV2Request(BaseModel):
     message: str
 
 @app.post("/chats_v2")
-def chats_v2(body: ChatV2Request):
+def chats_v2(body: ChatV2Request, user: dict = Depends(get_current_user)):
     session_id = body.session_id
     user_msg = body.message.strip()
 
     if not user_msg:
         return JSONResponse({"error": "Empty message"}, status_code=400)
+    
+    save_message(session_id, "user", user_msg, user["id"])
 
     state = SEARCH_V2_SESSIONS[session_id]
 
@@ -543,6 +538,12 @@ def chats_v2(body: ChatV2Request):
 
         update_state(state, facts)
         update_history(state, user_msg, answer)
+        
+        save_message(session_id, "ai", answer, user["id"])
+        
+        if state.turn == 1:
+                title = user_msg[:30] + ("..." if len(user_msg) > 30 else "")
+                update_session_title(session_id, title, user["id"])
 
         return {
             "session_id": session_id,
@@ -555,6 +556,40 @@ def chats_v2(body: ChatV2Request):
             {"error": f"chats_v2 failed: {str(e)}"},
             status_code=500,
         )
+        
+@app.get("/chats")
+def list_chats(user = Depends(get_current_user)):
+    return get_user_sessions(user["id"])
+
+@app.get("/chats/{session_id}/messages")
+def list_chat_messages(session_id: str, user = Depends(get_current_user)):
+    try:
+        return get_session_messages(session_id, user["id"])
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=403)
+
+@app.post("/chats/session")
+def create_new_session(user = Depends(get_current_user)):
+    """
+    Creates a new session in PostgreSQL and returns the session_id.
+    """
+    new_session = create_session(user_id=user["id"], title="New Conversation")
+    
+    if not new_session:
+        return JSONResponse({"error": "Failed to create DB session"}, status_code=500)
+        
+    return {"session_id": new_session["id"]}
+
+def remove_chat_session(session_id: str, user = Depends(get_current_user)):
+    try:
+        delete_session(session_id, user["id"])
+        
+        if session_id in SEARCH_V2_SESSIONS:
+            del SEARCH_V2_SESSIONS[session_id]
+            
+        return {"status": "deleted", "session_id": session_id}
+    except Exception as e:
+        return JSONResponse({"error": f"Failed to delete session: {e}"}, status_code=500)
 
 # -------------------------------------------------------------------
 # Text to Speech (standalone)

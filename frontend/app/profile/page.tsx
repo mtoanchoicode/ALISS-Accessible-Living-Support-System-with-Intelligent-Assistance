@@ -19,25 +19,81 @@ import Image from "next/image";
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { profile, isLoading, initials, isLoggingOut, handleLogout } = useUserProfile();
+  const { profile, isLoading, initials, isLoggingOut, handleLogout } =
+    useUserProfile();
 
   const menuItems = [
-    { icon: User, label: "Personal Information"},
-    { icon: Settings, label: "App Settings"},
-    { icon: Bell, label: "Notifications"},
-    { icon: Shield, label: "Privacy & Security"},
+    { icon: User, label: "Personal Information" },
+    { icon: Settings, label: "App Settings" },
+    { icon: Bell, label: "Notifications" },
+    { icon: Shield, label: "Privacy & Security" },
   ];
 
+  // --- Loading Skeleton State ---
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        {/* Header (Keep interactive so user can go back while loading) */}
+        <header className="px-4 py-4 flex items-center justify-between bg-white border-b border-slate-100 sticky top-0 z-10">
+          <button
+            onClick={() => router.push("/home")}
+            className="p-2 hover:bg-slate-100 rounded-full transition-colors"
+          >
+            <ArrowLeft className="w-6 h-6 text-slate-600" />
+          </button>
+          <div className="p-2">
+            <div className="w-6 h-6 bg-slate-200 rounded-full animate-pulse" />
+          </div>
+        </header>
+
+        <div className="p-4 space-y-8 flex-grow">
+          {/* Profile Header Skeleton */}
+          <div className="flex flex-col items-center justify-center pt-4 pb-2">
+            <div className="w-28 h-28 bg-slate-200 rounded-full animate-pulse shadow-sm" />
+            <div className="mt-4 text-center space-y-2 flex flex-col items-center">
+              <div className="w-48 h-8 bg-slate-200 rounded-md animate-pulse" />
+              <div className="w-32 h-5 bg-slate-200 rounded-md animate-pulse mt-1" />
+            </div>
+          </div>
+
+          {/* Menu Items Skeleton */}
+          <div className="bg-white overflow-hidden">
+            {[1, 2, 3, 4].map((i, index) => (
+              <div
+                key={i}
+                className={`w-full flex items-center justify-between p-5 ${
+                  index !== 3 ? "border-b border-slate-100" : ""
+                }`}
+              >
+                <div className="flex items-center space-x-4">
+                  <div className="w-10 h-10 bg-slate-200 rounded-xl animate-pulse" />
+                  <div className="h-5 w-36 bg-slate-200 rounded animate-pulse" />
+                </div>
+                <div className="w-5 h-5 bg-slate-200 rounded-full animate-pulse" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Footer Skeleton */}
+        <div className="p-4 mt-auto border-t border-slate-100 bg-white">
+          <div className="w-full h-[56px] bg-slate-200 rounded-full animate-pulse" />
+        </div>
+      </div>
+    );
+  }
+
+  // --- Actual Page Content ---
   return (
     <div className="min-h-screen flex flex-col">
       <header className="px-4 py-4 flex items-center justify-between bg-white border-b border-slate-100 sticky top-0 z-10">
-        <button 
+        <button
           onClick={() => router.push("/home")}
           className="p-2 hover:bg-slate-100 rounded-full transition-colors"
         >
           <ArrowLeft className="w-6 h-6 text-slate-600" />
         </button>
-        <Link 
+        <Link
           href="/edit"
           className="p-2 hover:bg-slate-100 rounded-full transition-colors text-[#3F62C7]"
         >
@@ -53,39 +109,29 @@ export default function ProfilePage() {
         >
           <div className="relative group">
             <div className="w-28 h-28 bg-blueberry rounded-full flex items-center justify-center text-white shadow-md overflow-hidden relative">
-              {isLoading ? (
-                  <Loader2 className="w-8 h-8 animate-spin opacity-40" />
-                ) : profile?.image_uri ? (
-                  <Image
-                    src={profile.image_uri}
-                    alt="Profile"
-                    fill
-                    className="object-cover"
-                    onLoadingComplete={(img) => img.classList.remove("opacity-0")}
-                  />
-                ) : initials ? (
-                  <span className="text-3xl font-bold tracking-tighter text-white uppercase">
-                    {initials}
-                  </span>
-                ) : (
-                  <User className="w-12 h-12 text-creamy/50" />
-                )}
+              {profile?.image_uri ? (
+                <Image
+                  src={profile.image_uri}
+                  alt="Profile"
+                  fill
+                  className="object-cover"
+                  onLoadingComplete={(img) => img.classList.remove("opacity-0")}
+                />
+              ) : initials ? (
+                <span className="text-3xl font-bold tracking-tighter text-white uppercase">
+                  {initials}
+                </span>
+              ) : (
+                <User className="w-12 h-12 text-creamy/50" />
+              )}
             </div>
           </div>
-          
+
           <div className="mt-4 text-center">
             <h2 className="text-2xl font-extrabold text-slate-900 leading-tight">
-              {isLoading ? (
-                <span className="inline-block w-32 h-6 bg-slate-200 animate-pulse rounded" />
-              ) : profile ? (
-                `${profile.first_name} ${profile.last_name}`
-              ) : (
-                "User"
-              )}
+              {profile ? `${profile.first_name} ${profile.last_name}` : "User"}
             </h2>
-            <p className="text-slate-500 font-medium mt-1">
-              {isLoading ? "Fetching details..." : profile?.email}
-            </p>
+            <p className="text-slate-500 font-medium mt-1">{profile?.email}</p>
           </div>
         </motion.div>
 
@@ -99,14 +145,20 @@ export default function ProfilePage() {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.05 }}
                 className={`w-full flex items-center justify-between p-5 hover:bg-slate-50 transition-colors ${
-                  index !== menuItems.length - 1 ? "border-b-1 border-slate-200" : ""
+                  index !== menuItems.length - 1
+                    ? "border-b border-slate-100"
+                    : ""
                 }`}
               >
                 <div className="flex items-center space-x-4">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-black`}>
+                  <div
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center text-black`}
+                  >
                     <Icon className="w-5 h-5" />
                   </div>
-                  <span className="font-semibold text-slate-700">{item.label}</span>
+                  <span className="font-semibold text-slate-700">
+                    {item.label}
+                  </span>
                 </div>
                 <ChevronRight className="w-5 h-5 text-slate-300" />
               </motion.button>
@@ -115,19 +167,19 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* --- BOTTOM LOGOUT SECTION --- */}
       <div className="p-4 mt-auto border-t border-slate-100 bg-white">
         <motion.button
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           onClick={handleLogout}
           disabled={isLoggingOut}
-          className="w-full flex items-center justify-center space-x-2 p-4 bg-[#3F62C7] text-white rounded-full font-bold hover:bg-red-100 transition-all active:scale-[0.98] disabled:opacity-70"
+          className="w-full flex items-center justify-center space-x-2 p-4 bg-[#3F62C7] text-white rounded-full font-bold hover:bg-[#3F62C7]/90 transition-all active:scale-[0.98] disabled:opacity-70"
         >
           {isLoggingOut ? (
             <Loader2 className="w-5 h-5 animate-spin" />
           ) : (
             <>
+              <LogOut className="w-5 h-5" />
               <span>Sign Out</span>
             </>
           )}

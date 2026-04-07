@@ -93,7 +93,7 @@ export default function CameraView({
                 }
               }}
               selectedObjectId={selectedObjectId}
-              className=""
+              className="absolute top-0 left-0 w-full h-full pointer-events-auto"
             />
           </div>
         )}
