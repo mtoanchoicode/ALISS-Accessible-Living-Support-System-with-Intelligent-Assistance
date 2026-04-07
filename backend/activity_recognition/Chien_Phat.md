@@ -1,196 +1,122 @@
-# Integration Guide for Phat — Backend API & Event Pipeline
+# Local Testing Guide — Chien & Phat Integration
 
-Chien has built the full pipeline and wired it into the backend. This document is everything you need to consume the interaction events and push them to the database.
-
----
-
-## What the Pipeline Does
-
-When a video is uploaded, the backend:
-1. Runs YOLO tracking + ReID to identify named persons in the video
-2. Runs your pose/object detection to find held objects
-3. Links each held object to the nearest named person
-4. Produces a clean list of `start_hold` / `end_hold` events
-5. Stores them in memory under `VIDEO_EVENTS[video_id]`
-
-Your job: poll the events endpoint, read the events, insert them into the database.
+This document explains how to run the human tracking + activity recognition pipeline locally without the frontend or API.
 
 ---
 
-## Step-by-Step: Testing the API
+## Prerequisites
 
-### Prerequisites
-
-- Backend running locally (ask Chien for the `.env` file)
+- Python virtual environment activated (`backend/projectb/` or your local venv)
 - Model files placed in the correct locations (see `context.md`)
-- Python virtual environment activated (`backend/projectb/`)
+- Gallery images set up under `backend/gallery/` (already included for Trung and Phat)
 
-### 1. Start the backend
+---
+
+## Required Dependencies
+
+```bash
+pip install ultralytics torchreid opencv-python torch
+```
+
+---
+
+## Model Files to Place Manually
+
+Before running, ensure these files exist:
+
+```
+backend/
+    yolov8n.pt
+    activity_recognition/
+        YOLO26_pose.pt
+        YOLO26_object.pt
+```
+
+`osnet_ain_x1_0_imagenet.pth` will be **auto-downloaded** into `backend/.torchreid/` on first run.
+
+---
+
+## Running the Test Script
+
+Run from the `backend/` directory:
 
 ```bash
 cd backend
-uvicorn api.app:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Wait until you see:
-```
-[ReID] Gallery ready: N feature vectors.
-INFO:     Application startup complete.
-```
+### Test ReID tracking only (no pose/object models needed)
 
-### 2. Open Swagger UI
-
-Go to: `http://localhost:8000/docs`
-
-This is a full interactive API browser — no frontend needed.
-
-### 3. Get an auth token
-
-Call `POST /auth/login` with your account credentials:
-
-```json
-{
-  "email": "your@email.com",
-  "password": "yourpassword"
-}
+```bash
+python test_pipeline.py --video path/to/your_video.mp4 --reid-only
 ```
 
-Copy the `access_token` from the response.
+### Test full pipeline (ReID + pose + object detection)
 
-Click **Authorize** (top-right of Swagger UI) and enter:
+```bash
+python test_pipeline.py --video path/to/your_video.mp4 --location "Living Room"
 ```
-Bearer <paste_token_here>
-```
 
-### 4. Upload a test video
+### Options
 
-Call `POST /videos/upload` with:
-- `name` — any label, e.g. `"test_video"`
-- `location` — room name, e.g. `"living_room"`
-- `file` — your `.mp4` test video
-
-The response returns immediately with a `record.id` — save this as `<video_id>`. Processing runs in the background.
-
-### 5. Poll for events
-
-Call `GET /videos/{video_id}/events` using the `<video_id>` from above.
-
-Keep polling until `status` changes from `"processing"` to `"ready"`.
+| Flag | Description | Default |
+|---|---|---|
+| `--video` | Path to input `.mp4` video (required) | — |
+| `--location` | Room label attached to events | `"Test Room"` |
+| `--reid-only` | Skip pose/object models, test tracking only | off |
+| `--out` | Output annotated video path | `output_annotated.mp4` |
 
 ---
 
-## Event API Reference
+## Output
 
-### Upload Video
+After running, you get:
 
-```
-POST /videos/upload
-Authorization: Bearer <token>
-Content-Type: multipart/form-data
+1. **`output_annotated.mp4`** — video with bounding boxes drawn:
+   - Green box + name label for identified persons
+   - Orange box + object label for objects being held (detected via wrist-object scoring)
 
-name      (str)   display name for the video
-location  (str)   room name, e.g. "living_room"
-file      (file)  .mp4 video file
-```
+2. **`output_annotated.json`** — list of interaction events:
 
-**Response** (immediate, processing starts in background):
 ```json
-{
-  "saved": true,
-  "record": {
-    "id": "abc123",
-    "name": "test_video",
-    "video_uri": "processing"
+[
+  {
+    "type": "start_hold",
+    "person_name": "Trung",
+    "object_name": "cup",
+    "time": "2026-04-07T10:23:45+07:00",
+    "location": "Living Room"
+  },
+  {
+    "type": "end_hold",
+    "person_name": "Trung",
+    "object_name": "cup",
+    "time": "2026-04-07T10:24:12+07:00",
+    "location": "Living Room"
   }
-}
+]
 ```
 
----
-
-### Get Interaction Events
-
-```
-GET /videos/{video_id}/events
-Authorization: Bearer <token>
-```
-
-**While processing:**
-```json
-{
-  "video_id": "abc123",
-  "location": "living_room",
-  "status": "processing",
-  "events": []
-}
-```
-
-**When ready:**
-```json
-{
-  "video_id": "abc123",
-  "location": "living_room",
-  "status": "ready",
-  "events": [
-    {
-      "type": "start_hold",
-      "person_name": "Alice",
-      "object_name": "phone",
-      "time": "2026-04-07T10:23:45+07:00",
-      "location": "living_room"
-    },
-    {
-      "type": "end_hold",
-      "person_name": "Alice",
-      "object_name": "phone",
-      "time": "2026-04-07T10:24:12+07:00",
-      "location": "living_room"
-    }
-  ]
-}
-```
-
-**Status values:**
-
-| Status | Meaning |
-|---|---|
-| `processing` | Inference is still running — keep polling |
-| `ready` | Events are available |
-| `error` | Processing failed |
-| `not_found` | video_id doesn't exist |
+3. **Console output** — summary of all events printed to terminal.
 
 ---
 
 ## Event Format
 
-Each event object:
-
-| Field | Type | Description |
-|---|---|---|
-| `type` | string | `"start_hold"` or `"end_hold"` |
-| `person_name` | string | Name from ReID gallery (never `"Unknown"`) |
-| `object_name` | string | YOLO object class label (e.g. `"cup"`, `"phone"`) |
-| `time` | string | ISO-8601 timestamp in UTC+7, offset from video start |
-| `location` | string | Room name passed in from the upload form |
+| Field | Description |
+|---|---|
+| `type` | `"start_hold"` — person picks up object / `"end_hold"` — person puts it down |
+| `person_name` | Name from gallery (never `"Unknown"` — unknowns are filtered out) |
+| `object_name` | YOLO object class label (e.g. `"cup"`, `"phone"`, `"bottle"`) |
+| `time` | ISO-8601 timestamp in UTC+7, offset from video start time |
+| `location` | Room name passed via `--location` flag |
 
 **Guarantees:**
-- Unknown persons are filtered out — every `person_name` is a gallery name
-- For each `(person_name, object_name)` pair: exactly one `start_hold` and one `end_hold`
-- Events are sorted chronologically by `time`
+- For each `(person, object)` pair: only the **first** pickup and **last** put-down are recorded
+- Events are sorted chronologically
 
 ---
 
-## Key Files
-
-| File | Owner | Purpose |
-|---|---|---|
-| `activity_recognition/integration.py` | Chien | Full pipeline — tracking, ReID, scoring, event generation |
-| `activity_recognition/Object_detection_indoor.py` | Phat | Pose + object detection helpers |
-| `services/reid_service.py` | Chien | ReID config and gallery loading |
-| `api/app.py` | Chien | FastAPI routes — upload, background processing, events endpoint |
-
----
-
-## Tuning Parameters (if results are off)
+## Tuning Parameters
 
 In `activity_recognition/integration.py`:
 
@@ -205,14 +131,16 @@ In `services/reid_service.py`:
 
 | Parameter | Default | Effect |
 |---|---|---|
-| `reid_threshold` | `0.25` | Lower = stricter matching, fewer false names |
+| `reid_threshold` | `0.25` | Lower = stricter matching, fewer false name assignments |
 | `check_interval` | `10` | Frames between ReID checks for unidentified tracks |
 
 ---
 
-## Notes
+## Key Files
 
-- Do **not** write to `VIDEO_EVENTS` directly — it is Chien's internal store.
-- Do **not** modify `api/app.py`, `reid_service.py`, or `integration.py` without checking with Chien.
-- The annotated output video is uploaded to Supabase storage automatically — you do not need to handle it.
-- If the backend crashes on startup, the most common cause is missing model files. Check `context.md`.
+| File | Owner | Purpose |
+|---|---|---|
+| `activity_recognition/integration.py` | Chien | Full pipeline — tracking, ReID, scoring, event generation |
+| `activity_recognition/Object_detection_indoor.py` | Phat | Pose + object detection helpers |
+| `services/reid_service.py` | Chien | ReID config and gallery loading |
+| `test_pipeline.py` | Chien | Standalone test script (no API needed) |

@@ -12,7 +12,7 @@ An AI-driven system that helps elderly individuals locate misplaced objects in t
 |---|---|---|
 | Context Builder | Dan & Toan | Captures initial home images to build the baseline knowledge graph. One-time setup. **Do not modify.** |
 | Update Module | Chien & Phat | Monitors the home via camera, detects who holds which object, and records interaction events. |
-| Web Backend | Chien | FastAPI server that handles video uploads, runs inference, exposes results via REST API. |
+| Web Backend | Chien | FastAPI server — **handled separately, do not touch.** |
 
 ---
 
@@ -22,15 +22,15 @@ The integrated pipeline (`activity_recognition/integration.py`) runs in a single
 
 1. **YOLO bytetrack** — detects and tracks persons across frames, assigns `track_id`
 2. **ReID (torchreid osnet_ain_x1_0)** — matches each `track_id` to a person name from the gallery
-   - Name is locked once identified (no re-running ReID until person leaves frame)
+   - Name is locked once identified — no switching for the same track
    - Unknown persons are retried every 50 frames
    - Cosine distance threshold: `0.25` (strict — non-gallery people stay Unknown)
 3. **YOLO pose model** — detects wrist keypoints per person (every 3 frames)
 4. **YOLO object model** — detects object bounding boxes (every 3 frames)
-5. **Wrist-object scoring** (Phat's logic) — determines which objects are being held based on wrist proximity and motion correlation
+5. **Wrist-object scoring** (Phat's logic) — determines which objects are held based on wrist proximity and motion
 6. **Person-object linking** — links each held object to the nearest named person via IoU/proximity
 
-**Output:** A deduplicated list of interaction events — only the first `start_hold` and last `end_hold` per `(person, object)` pair. Unknown persons are excluded entirely.
+**Output:** A deduplicated list of interaction events — only the first `start_hold` and last `end_hold` per `(person, object)` pair. Unknown persons are excluded.
 
 ---
 
@@ -40,11 +40,14 @@ The gallery lives at `backend/gallery/`. Each subdirectory is a person:
 
 ```
 backend/gallery/
-    Alice/
-        photo1.jpg
-        photo2.jpg
-    Bob/
-        photo1.jpg
+    Trung/
+        1.png
+        2.png
+        ...
+    Phat/
+        1.png
+        2.png
+        ...
 ```
 
 - The folder name becomes the `person_name` in events.
@@ -64,6 +67,6 @@ backend/gallery/
 
 ---
 
-## Backend API — How to Test (for Phat)
+## How to Run the Pipeline Locally
 
-See `Chien_Phat.md` for the full API reference and step-by-step testing guide.
+See `Chien_Phat.md` for the full local testing guide.

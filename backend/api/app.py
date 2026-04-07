@@ -106,8 +106,6 @@ else:
 
 
 from services.reid_service import ReIDConfig, PersonReIDRunner
-from activity_recognition.integration import IntegratedVideoProcessor
-
 # Global ReID Initialization
 BASE_DIR_TMP = Path(__file__).resolve().parent.parent
 try:
@@ -121,21 +119,6 @@ try:
 except Exception as e:
     print(f"Warning: Failed to initialize PersonReIDRunner: {e}")
     reid_runner = None
-
-# Global Integrated Processor Initialization
-try:
-    integrated_processor = IntegratedVideoProcessor(
-        reid_runner=reid_runner,
-        pose_model_path=str(BASE_DIR_TMP / "activity_recognition" / "YOLO26_pose.pt"),
-        object_model_path=str(BASE_DIR_TMP / "activity_recognition" / "YOLO26_object.pt"),
-    )
-except Exception as e:
-    print(f"Warning: Failed to initialize IntegratedVideoProcessor: {e}")
-    integrated_processor = None
-
-# In-memory store for interaction events keyed by video record_id.
-# Phat reads from this immediately after processing completes.
-VIDEO_EVENTS: Dict[str, Dict] = {}
 
 
 # -------------------------------------------------------------------
@@ -526,22 +509,13 @@ def chat(body: ChatRequest, user = Depends(get_current_user)):
     }
 
 # -------------------------------------------------------------------
-# Chat v2 (graph-based retrieval)
+# Chat (+ optional TTS in same response)
 # -------------------------------------------------------------------
-try:
-    search_v2_memory = load_graph(Path(GRAPH_SAVE_PATH))
-    search_v2_retriever = GraphMemoryRetriever(search_v2_memory)
-    search_v2_resolver = GraphEntityResolver(search_v2_retriever)
-except Exception as e:
-    print(f"Warning: Failed to initialize search_v2 components: {e}")
-    search_v2_memory = None
-    search_v2_retriever = None
-    search_v2_resolver = None
+search_v2_memory = load_graph(Path(GRAPH_SAVE_PATH))
+search_v2_retriever = GraphMemoryRetriever(search_v2_memory)
+search_v2_resolver = GraphEntityResolver(search_v2_retriever)
 
-try:
-    SEARCH_V2_SESSIONS: Dict[str, Any] = defaultdict(ConversationState)
-except Exception:
-    SEARCH_V2_SESSIONS: Dict[str, Any] = defaultdict(dict)
+SEARCH_V2_SESSIONS: Dict[str, ConversationState] = defaultdict(ConversationState)
 
 class ChatV2Request(BaseModel):
     session_id: str
@@ -549,9 +523,6 @@ class ChatV2Request(BaseModel):
 
 @app.post("/chats_v2")
 def chats_v2(body: ChatV2Request):
-    if search_v2_retriever is None:
-        return JSONResponse({"error": "search_v2 is unavailable (graph not loaded)"}, status_code=503)
-
     session_id = body.session_id
     user_msg = body.message.strip()
 
@@ -728,68 +699,38 @@ async def create_new_video(video_data: dict, user: dict = Depends(get_current_us
     video_data["user_id"] = user["id"]
     return create_video(video_data)
 
-def process_reid_video_background(record_id: str, in_path: str, filename: str, location: str):
+def process_reid_video_background(record_id: str, in_path: str, filename: str):
     import os
-    out_path = f"{in_path}_annotated.mp4"
     try:
-        if integrated_processor is not None:
-            print(f"[Background Worker] Processing video ID: {record_id} via Integrated Processor")
-            events = integrated_processor.process_video(
-                Path(in_path), Path(out_path), location
-            )
-            VIDEO_EVENTS[record_id] = {
-                "video_id": record_id,
-                "location": location,
-                "status": "ready",
-                "events": events,
-            }
-            print(f"[Background Worker] Extracted {len(events)} events for video ID {record_id}.")
-        elif reid_runner is not None:
-            print(f"[Background Worker] Falling back to ReID-only for video ID: {record_id}")
+        out_path = f"{in_path}_annotated.mp4"
+        
+        if reid_runner is not None:
+            from pathlib import Path
+            print(f"[Background Worker] Processing video ID: {record_id} via ReID Runner")
             reid_runner.process_video(Path(in_path), Path(out_path))
-            VIDEO_EVENTS[record_id] = {
-                "video_id": record_id,
-                "location": location,
-                "status": "ready",
-                "events": [],
-            }
         else:
             import shutil
             shutil.copy(in_path, out_path)
-            VIDEO_EVENTS[record_id] = {
-                "video_id": record_id,
-                "location": location,
-                "status": "ready",
-                "events": [],
-            }
 
         with open(out_path, "rb") as out_f:
             processed_contents = out_f.read()
-
+            
         print(f"[Background Worker] Uploading Video ID {record_id} to Storage...")
         storage_res = upload_video_file(processed_contents, filename)
-
+        
         if storage_res.get("status") == "success":
             public_url = storage_res["url"]
             update_video(record_id, {"video_uri": public_url})
             print(f"[Background Worker] Completed Video ID {record_id}.")
         else:
             print(f"Background Upload Error: {storage_res.get('message')}")
-
+            
     except Exception as e:
         print(f"Video Processing Background task failed: {e}")
-        VIDEO_EVENTS[record_id] = {
-            "video_id": record_id,
-            "location": location,
-            "status": "error",
-            "events": [],
-        }
     finally:
-        if os.path.exists(in_path):
-            os.remove(in_path)
+        if os.path.exists(in_path): os.remove(in_path)
         try:
-            if os.path.exists(out_path):
-                os.remove(out_path)
+            if os.path.exists(out_path): os.remove(out_path)
         except Exception:
             pass
 
@@ -798,7 +739,6 @@ def process_reid_video_background(record_id: str, in_path: str, filename: str, l
 async def upload_video_endpoint(
     background_tasks: BackgroundTasks,
     name: str = Form(...),
-    location: str = Form(""),
     file: UploadFile = File(...),
     user: dict = Depends(get_current_user)
 ):
@@ -832,19 +772,11 @@ async def upload_video_endpoint(
             if in_path and os.path.exists(in_path): os.remove(in_path)
             return JSONResponse(status_code=500, content={"error": "Failed to create DB video abstract"})
 
-        VIDEO_EVENTS[record_id] = {
-            "video_id": record_id,
-            "location": location,
-            "status": "processing",
-            "events": [],
-        }
-
         background_tasks.add_task(
             process_reid_video_background,
             record_id=record_id,
             in_path=in_path,
-            filename=file.filename,
-            location=location,
+            filename=file.filename
         )
         
         return {"saved": True, "record": record}
@@ -854,24 +786,6 @@ async def upload_video_endpoint(
             {"error": f"Video upload sequence failed: {e}"},
             status_code=500
         )
-
-@app.get("/videos/{video_id}/events")
-async def get_video_events(video_id: str, user: dict = Depends(get_current_user)):
-    """
-    Returns the interaction events extracted from a processed video.
-
-    Status values:
-      processing - inference is still running
-      ready      - events are available
-      error      - processing failed
-    """
-    entry = VIDEO_EVENTS.get(video_id)
-    if entry is None:
-        return JSONResponse(
-            {"video_id": video_id, "status": "not_found", "events": []},
-            status_code=404,
-        )
-    return entry
 
 @app.delete("/videos/{video_id}")
 async def remove_video(video_id: str):
