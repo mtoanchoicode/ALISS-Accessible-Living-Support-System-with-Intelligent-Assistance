@@ -169,6 +169,7 @@ class IntegratedVideoProcessor:
     INFERENCE_EVERY_N: int = 3       # run pose+object models every N frames
     HOLD_SCORE_THRESHOLD: float = 0.3
     PERSON_PROXIMITY_PX: float = 50.0
+    UNKNOWN_RECHECK_INTERVAL: int = 50  # frames between ReID retries for unknowns
 
     def __init__(
         self,
@@ -264,9 +265,19 @@ class IntegratedVideoProcessor:
                     tracked_persons[track_id] = (x1, y1, x2, y2)
 
                     track_history[track_id] = track_history.get(track_id, 0) + 1
-                    should_reid = (
-                        track_history[track_id] % self.reid_runner.config.check_interval == 0
-                    )
+                    current_name = assigned_names.get(track_id)
+
+                    # Once a name is locked in, never re-run ReID for this track
+                    if current_name and current_name != "Unknown":
+                        should_reid = False
+                    elif current_name == "Unknown":
+                        # Retry unknowns every UNKNOWN_RECHECK_INTERVAL frames
+                        should_reid = (track_history[track_id] % self.UNKNOWN_RECHECK_INTERVAL == 0)
+                    else:
+                        # Not yet assigned — check on regular interval
+                        should_reid = (
+                            track_history[track_id] % self.reid_runner.config.check_interval == 0
+                        )
 
                     if should_reid:
                         crop = frame[y1:y2, x1:x2]
@@ -391,9 +402,27 @@ class IntegratedVideoProcessor:
                             best_iou = iou_val
                             best_person = assigned_names.get(track_id, "Unknown")
 
-                frame_pairs.add((best_person, obj_label))
+                # Only record pairs where the person is identified
+                if best_person != "Unknown":
+                    frame_pairs.add((best_person, obj_label))
 
-            # ── 6. Event tracking ────────────────────────────────────────
+            # ── 6. Draw bounding boxes onto frame ────────────────────────
+            for track_id, person_bbox in tracked_persons.items():
+                name = assigned_names.get(track_id)
+                if not name or name == "Unknown":
+                    continue
+                px1, py1, px2, py2 = person_bbox
+                cv2.rectangle(frame, (px1, py1), (px2, py2), (0, 255, 0), 2)
+                cv2.putText(frame, name, (px1, max(0, py1 - 10)),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+
+            for obj_box, obj_label in held_objects:
+                ox1, oy1, ox2, oy2 = obj_box
+                cv2.rectangle(frame, (ox1, oy1), (ox2, oy2), (0, 165, 255), 2)
+                cv2.putText(frame, obj_label, (ox1, max(0, oy1 - 10)),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 165, 255), 2)
+
+            # ── 8. Event tracking ────────────────────────────────────────
             current_time_fn = lambda fi: (
                 video_start_time + timedelta(seconds=fi / fps)
             ).isoformat()
@@ -424,7 +453,7 @@ class IntegratedVideoProcessor:
 
             out.write(frame)
 
-        # ── 7. Flush objects still active at end of video ────────────────
+        # ── 9. Flush objects still active at end of video ────────────────
         for (person_name, obj_name) in active_objects:
             events.append({
                 "type": "end_hold",
@@ -438,4 +467,24 @@ class IntegratedVideoProcessor:
         out.release()
         cv2.destroyAllWindows()
 
-        return events
+        # ── 10. Deduplicate: keep only first start_hold and last end_hold
+        #        per (person, object) pair ──────────────────────────────────
+        first_start: Dict[Tuple[str, str], Dict] = {}
+        last_end: Dict[Tuple[str, str], Dict] = {}
+
+        for ev in events:
+            key = (ev["person_name"], ev["object_name"])
+            if ev["type"] == "start_hold":
+                if key not in first_start:
+                    first_start[key] = ev
+            elif ev["type"] == "end_hold":
+                last_end[key] = ev  # overwrite to always get the last one
+
+        filtered: List[Dict] = []
+        for key, start_ev in first_start.items():
+            filtered.append(start_ev)
+            if key in last_end:
+                filtered.append(last_end[key])
+
+        filtered.sort(key=lambda e: e["time"])
+        return filtered

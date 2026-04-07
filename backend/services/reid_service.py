@@ -23,7 +23,7 @@ class ReIDConfig:
 
     # ReID / matching config
     extractor_model_name: str = "osnet_ain_x1_0"
-    reid_threshold: float = 0.4
+    reid_threshold: float = 0.25
     check_interval: int = 10
 
     # Tracking config

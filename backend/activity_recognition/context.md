@@ -1,38 +1,69 @@
-# Project Context: Accessible Living Support System with Artificial Intelligence
+# Project Context: Accessible Living Support System with Intelligent Assistance (ALISS)
 
-**Core Objective:**
-Develop an AI-driven system to assist elderly individuals in locating misplaced objects within their homes.
+## Core Objective
 
-**System Modules & Ownership:**
+An AI-driven system that helps elderly individuals locate misplaced objects in their homes by tracking who picked up what, when, and where.
 
-* **Context Builder Module (Owners: Dan & Toan)**
-    * *Function:* Captures initial home images to build the baseline database and knowledge graph. This is a one-time initialization step.
-    * *Constraint:* You must read and understand this codebase for context, but **strictly do not modify any code related to this module.**
+---
 
-* **Update Module (Owners: Chien & Phat) — CURRENT FOCUS**
-    * *Function:* Uses in-house cameras to monitor activities and update the system dynamically.
-    * *My Role (Chien):* Person Re-identification. Implementing `torchreid` to re-identify individuals in the video feed and assign names based on a pre-defined gallery.
-    * *Phat's Role:* Pose and Object Detection. Determining whether a detected person is currently holding a specific object.
-    * *Integration Goal:* Merge the Re-ID pipeline with the pose/object detection pipeline to track object interaction states over time.
+## System Modules & Ownership
 
-* **Web Backend Module (Owner: Chien)**
-    * *Function:* Handles video uploads, model inference, and frontend communication.
-    * *Current State:* The backend successfully processes the uploaded video and returns the finalized video to the frontend.
-    * *New Requirement:* Create a specific backend API endpoint/URL that returns the extracted interaction event data (defined below) after inference. This structured output will be delivered to Phat, who will handle the database update.
+| Module | Owners | Function |
+|---|---|---|
+| Context Builder | Dan & Toan | Captures initial home images to build the baseline knowledge graph. One-time setup. **Do not modify.** |
+| Update Module | Chien & Phat | Monitors the home via camera, detects who holds which object, and records interaction events. |
+| Web Backend | Chien | FastAPI server that handles video uploads, runs inference, exposes results via REST API. |
 
-**Current Task: Architecture Planning & Integration**
+---
 
-Before writing any integration code, we need to establish a solid technical plan for combining the two components in the Update Module.
+## Update Module — What Has Been Built
 
-* **Target Output:** The integrated system must evaluate the video and output specific interaction events. 
-* **Required Event Data:**
-    * *Start Hold Event:* `[Person Name, Object Name, Start Time, Fixed Location]`
-    * *End Hold Event (Put Down):* `[Person Name, Object Name, End Time, Fixed Location]`
-* *Notes on Data:* Time is captured from the video/real-time tracking. Location is fixed and assumed to be pre-defined. 
-* *Scope Limitation:* Do not write any code for database insertion. The goal is strictly to return the event data payload.
+The integrated pipeline (`activity_recognition/integration.py`) runs in a single frame loop:
 
-**Instructions for AI Assistant:**
-* Acknowledge this context.
-* Propose a system architecture plan to integrate the `torchreid` outputs with the pose/object detection outputs.
-* Design the backend endpoint payload structure to return the required event data.
-* Restrict all code modifications strictly to Chien and Phat's components.
+1. **YOLO bytetrack** — detects and tracks persons across frames, assigns `track_id`
+2. **ReID (torchreid osnet_ain_x1_0)** — matches each `track_id` to a person name from the gallery
+   - Name is locked once identified (no re-running ReID until person leaves frame)
+   - Unknown persons are retried every 50 frames
+   - Cosine distance threshold: `0.25` (strict — non-gallery people stay Unknown)
+3. **YOLO pose model** — detects wrist keypoints per person (every 3 frames)
+4. **YOLO object model** — detects object bounding boxes (every 3 frames)
+5. **Wrist-object scoring** (Phat's logic) — determines which objects are being held based on wrist proximity and motion correlation
+6. **Person-object linking** — links each held object to the nearest named person via IoU/proximity
+
+**Output:** A deduplicated list of interaction events — only the first `start_hold` and last `end_hold` per `(person, object)` pair. Unknown persons are excluded entirely.
+
+---
+
+## Gallery Setup (Required for ReID)
+
+The gallery lives at `backend/gallery/`. Each subdirectory is a person:
+
+```
+backend/gallery/
+    Alice/
+        photo1.jpg
+        photo2.jpg
+    Bob/
+        photo1.jpg
+```
+
+- The folder name becomes the `person_name` in events.
+- Add at least 3–5 clear photos per person for best accuracy.
+- Photos should be cropped to the person (chest-up or full body).
+
+---
+
+## Model Files (Not in Git — Must Be Placed Manually)
+
+| File | Location |
+|---|---|
+| `YOLO26_pose.pt` | `backend/activity_recognition/` |
+| `YOLO26_object.pt` | `backend/activity_recognition/` |
+| `yolov8n.pt` | `backend/` |
+| `osnet_ain_x1_0_imagenet.pth` | Auto-downloaded to `backend/.torchreid/` on first run |
+
+---
+
+## Backend API — How to Test (for Phat)
+
+See `Chien_Phat.md` for the full API reference and step-by-step testing guide.
