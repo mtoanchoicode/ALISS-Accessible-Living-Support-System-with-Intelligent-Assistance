@@ -11,7 +11,6 @@ export const apiClient = async (
     ...((options.headers as Record<string, string>) || {}),
   };
 
-  // Only inject application/json if we are NOT transmitting multipart FormData. (Browser computes multipart boundary natively)
   if (!(options.body instanceof FormData)) {
     headers["Content-Type"] = "application/json";
   }
@@ -29,7 +28,7 @@ export const apiClient = async (
     const errText = await response.text();
     console.error("Authentication failed 401:", errText);
     if (typeof window !== "undefined") {
-      alert("ALISS API 401 Unauthorized Error: " + errText);
+      console.log("ALISS API 401 Unauthorized Error: " + errText);
     }
     throw new Error("Unauthorized");
   }
