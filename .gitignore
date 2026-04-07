@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+backend/projectb/
+venv/
+.venv/
+env/
+
+# Model weights — do not commit large binary files
+*.pth
+*.onnx
+*.bin
+backend/.torchreid/
+# YOLO models — exclude large variants, keep yolov8n.pt
+backend/activity_recognition/*.pt
+!backend/yolov8n.pt
+
+# Misc
+.env
+.DS_Store
+Thumbs.db
