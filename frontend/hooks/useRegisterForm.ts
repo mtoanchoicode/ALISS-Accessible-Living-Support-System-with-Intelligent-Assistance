@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authService } from "@/services/authService";
-import { 
-  validateEmail, 
-  validateVietnamesePhone, 
-  checkPasswordCriteria, 
-  formatPhoneForBackend 
+import {
+  validateEmail,
+  validateVietnamesePhone,
+  checkPasswordCriteria,
+  formatPhoneForBackend,
 } from "@/lib/validation";
 
 export function useRegisterForm() {
@@ -48,50 +48,53 @@ export function useRegisterForm() {
     e.preventDefault();
 
     setTouched({
-      firstName: true, lastName: true, phone: true, email: true, password: true
+      firstName: true,
+      lastName: true,
+      phone: true,
+      email: true,
+      password: true,
     });
 
     setIsLoading(true);
     setErrorMsg("");
     setSuccessMsg("");
 
-  try {
-    const fullPhone = formatPhoneForBackend(formData.phone);
+    try {
+      const fullPhone = formatPhoneForBackend(formData.phone);
 
-    // 1. Define the timeout promise
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("TIMEOUT")), 5000)
-    );
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("TIMEOUT")), 5000),
+      );
+      const response = (await Promise.race([
+        authService.register({
+          first_name: formData.firstName,
+          last_name: formData.lastName,
+          phone: fullPhone,
+          email: formData.email,
+          password: formData.password,
+        }),
+        timeoutPromise,
+      ])) as any;
 
-    // 2. Race the registration call against the 5s timer
-    const response = (await Promise.race([
-      authService.register({
-        first_name: formData.firstName,
-        last_name: formData.lastName,
-        phone: fullPhone,
-        email: formData.email,
-        password: formData.password,
-      }),
-      timeoutPromise,
-    ])) as any;
-
-    if (response.data.status === "error") {
-      setErrorMsg(response.data.message || "Registration failed. Please try again.");
-    } else {
-      setSuccessMsg("Account created! Redirecting to login...");
-      setTimeout(() => router.push("/home"), 2000);
+      if (response.status === "success") {
+        setSuccessMsg("Account created! Redirecting to login...");
+      } else {
+        setErrorMsg(
+          response.message || "Registration failed. Please try again.",
+        );
+      }
+    } catch (error: any) {
+      if (error.message === "TIMEOUT") {
+        setErrorMsg(
+          "The server is taking too long to respond. Please try again.",
+        );
+      } else {
+        setErrorMsg(error.message || "An unexpected error occurred.");
+      }
+    } finally {
+      setIsLoading(false);
     }
-  } catch (error: any) {
-    // 3. Handle timeout vs server errors
-    if (error.message === "TIMEOUT") {
-      setErrorMsg("The server is taking too long to respond. Please try again.");
-    } else {
-      setErrorMsg(error.message || "An unexpected error occurred.");
-    }
-  } finally {
-    setIsLoading(false);
-  }
-};
+  };
 
   const toggleShowPassword = () => setShowPassword(!showPassword);
 

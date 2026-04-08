@@ -122,8 +122,8 @@ export function useStorage(isChecking: boolean) {
   });
 
   const uploadVideoMutation = useMutation({
-    mutationFn: ({ name, file }: { name: string; file: File }) =>
-      videoService.uploadVideo(name, file),
+    mutationFn: ({ name, file, location }: { name: string; file: File; location?: string }) =>
+      videoService.uploadVideo(name, file, location),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["videos"] }),
   });
 
@@ -143,8 +143,8 @@ export function useStorage(isChecking: boolean) {
     setEditingItem(null);
   };
 
-  const handleUploadVideo = async (name: string, file: File) => {
-    await uploadVideoMutation.mutateAsync({ name, file });
+  const handleUploadVideo = async (name: string, file: File, location?: string) => {
+    await uploadVideoMutation.mutateAsync({ name, file, location });
     setIsUploadingVideo(false);
   };
 

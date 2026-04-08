@@ -5,11 +5,12 @@ import { X, Loader2, UploadCloud, FileVideo } from "lucide-react";
 interface UploadVideoModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onUpload: (name: string, file: File) => Promise<void>;
+  onUpload: (name: string, file: File, location?: string) => Promise<void>;
 }
 
 export function UploadVideoModal({ isOpen, onClose, onUpload }: UploadVideoModalProps) {
   const [name, setName] = useState("");
+  const [location, setLocation] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -17,6 +18,7 @@ export function UploadVideoModal({ isOpen, onClose, onUpload }: UploadVideoModal
   useEffect(() => {
     if (isOpen) {
       setName("");
+      setLocation("");
       setSelectedFile(null);
     }
   }, [isOpen]);
@@ -39,7 +41,7 @@ export function UploadVideoModal({ isOpen, onClose, onUpload }: UploadVideoModal
     
     try {
       setIsUploading(true);
-      await onUpload(name.trim(), selectedFile);
+      await onUpload(name.trim(), selectedFile, location.trim() || undefined);
       onClose();
     } catch (error) {
       console.error("Failed to upload video:", error);
@@ -139,6 +141,18 @@ export function UploadVideoModal({ isOpen, onClose, onUpload }: UploadVideoModal
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Enter a descriptive title"
+                  className="w-full bg-slate-50 border border-slate-200 px-4 py-3 text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-[#3F62C7] focus:border-transparent transition-all rounded-xl"
+                />
+              </div>
+
+              {/* Location Input */}
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-600 ml-1">Location (Optional)</label>
+                <input
+                  type="text"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  placeholder="E.g., Living Room, Kitchen"
                   className="w-full bg-slate-50 border border-slate-200 px-4 py-3 text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-[#3F62C7] focus:border-transparent transition-all rounded-xl"
                 />
               </div>

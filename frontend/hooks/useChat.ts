@@ -25,7 +25,12 @@ export function useChat() {
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(
+    null,
+  );
+  const [displayedText, setDisplayedText] = useState<string>("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const streamTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const fetchSessions = useCallback(async () => {
     try {
@@ -87,6 +92,44 @@ export function useChat() {
       setTimeout(scrollToBottom, 50);
     }
   }, [currentMessages, currentSessionId]);
+
+  // Typing effect for streaming messages
+  useEffect(() => {
+    if (!streamingMessageId) {
+      setDisplayedText("");
+      return;
+    }
+
+    const messageBeingStreamed = currentMessages.find(
+      (m) => m.id === streamingMessageId,
+    );
+    if (!messageBeingStreamed) return;
+
+    const fullText = messageBeingStreamed.text;
+    let charIndex = displayedText.length;
+
+    if (charIndex >= fullText.length) {
+      setStreamingMessageId(null);
+      setDisplayedText("");
+      return;
+    }
+
+    // Clear existing timer
+    if (streamTimerRef.current) {
+      clearTimeout(streamTimerRef.current);
+    }
+
+    // Reveal next character with 20ms delay
+    streamTimerRef.current = setTimeout(() => {
+      setDisplayedText((prev) => prev + fullText[charIndex]);
+    }, 20);
+
+    return () => {
+      if (streamTimerRef.current) {
+        clearTimeout(streamTimerRef.current);
+      }
+    };
+  }, [streamingMessageId, displayedText, currentMessages]);
 
   const createNewChat = () => {
     setCurrentSessionId("new");
@@ -167,20 +210,22 @@ export function useChat() {
       };
 
       setCurrentMessages((prev) => [...prev, aiResponse]);
+      setStreamingMessageId(aiResponse.id);
+      setDisplayedText("");
     } catch (err) {
       console.error("Chat API Error:", err);
-      setCurrentMessages((prev) => [
-        ...prev,
-        {
-          id: (Date.now() + 1).toString(),
-          text: "Sorry, I am having trouble connecting to my models.",
-          sender: "ai",
-          time: new Date().toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-        },
-      ]);
+      const errorMsg: Message = {
+        id: (Date.now() + 1).toString(),
+        text: "Sorry, I am having trouble connecting to my models.",
+        sender: "ai",
+        time: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      };
+      setCurrentMessages((prev) => [...prev, errorMsg]);
+      setStreamingMessageId(errorMsg.id);
+      setDisplayedText("");
     } finally {
       setIsSending(false);
     }
@@ -196,7 +241,9 @@ export function useChat() {
         currentSessionId === "new"
           ? "New Chat"
           : sessions.find((s) => s.id === currentSessionId)?.title,
-      messages: currentMessages,
+      messages: currentMessages.map((msg) =>
+        msg.id === streamingMessageId ? { ...msg, text: displayedText } : msg,
+      ),
     },
     input,
     setInput,
@@ -205,5 +252,6 @@ export function useChat() {
     deleteSession,
     handleSend,
     isSending,
+    streamingMessageId,
   };
 }

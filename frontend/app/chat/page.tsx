@@ -29,17 +29,17 @@ export default function ChatPage() {
     const showHeader = sessions.length !== 0 || isLoadingSessions;
 
     return (
-      <div className="flex flex-col h-full bg-slate-50 p-4 pb-24">
+      <div className="flex flex-col h-full bg-background p-4 pb-24">
         {showHeader && (
           <div className="flex items-center justify-between px-1 mb-6">
-            <h2 className="text-xl font-bold text-slate-900">Recent Chats</h2>
+            <h2 className="text-xl font-bold text-body">Recent Chats</h2>
             <button
               onClick={createNewChat}
               disabled={isLoadingSessions}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-full text-sm font-bold shadow-lg transition-all ${
+              className={`flex items-center space-x-2 px-4 py-2 rounded-full text-sm font-bold active:scale-95 transition-all duration-200 shadow-sm hover:shadow-md ${
                 isLoadingSessions
-                  ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none"
-                  : "bg-[#3F62C7] text-white shadow-[#3F62C7]/20 hover:bg-[#3F62C7]"
+                  ? "bg-surface text-muted cursor-not-allowed shadow-none"
+                  : "bg-primary text-white shadow-primary/20"
               }`}
             >
               <Plus className="w-4 h-4" />
@@ -69,20 +69,20 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 relative">
+    <div className="flex flex-col h-full bg-background relative">
       {/* Session Header */}
-      <div className="bg-white border-b border-slate-100 px-4 py-3 flex items-center space-x-4">
+      <div className="bg-surface border-b border-surface px-4 py-3 flex items-center space-x-4 shadow-sm">
         <button
           onClick={() => setCurrentSessionId(null)}
-          className="p-2 -ml-2 text-slate-400 hover:text-slate-600 transition-colors"
+          className="p-2 -ml-2 text-muted hover:text-body transition-colors"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="min-w-0">
-          <h3 className="font-bold text-slate-900 truncate text-sm">
+          <h3 className="font-bold text-body truncate text-sm">
             {currentSession?.title}
           </h3>
-          <p className="text-[10px] text-emerald-500 font-bold uppercase tracking-widest">
+          <p className="text-[10px] text-success font-bold uppercase tracking-widest">
             Active Session
           </p>
         </div>

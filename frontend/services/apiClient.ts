@@ -29,6 +29,8 @@ export const apiClient = async (
     console.error("Authentication failed 401:", errText);
     if (typeof window !== "undefined") {
       console.log("ALISS API 401 Unauthorized Error: " + errText);
+      localStorage.removeItem("aliss_token");
+      window.location.href = "/";
     }
     throw new Error("Unauthorized");
   }

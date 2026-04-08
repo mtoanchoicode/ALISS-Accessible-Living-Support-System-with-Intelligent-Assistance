@@ -671,43 +671,6 @@ async def read_all_items(user: dict = Depends(get_current_user)):
     # Pass the user's ID to the service function
     return fetch_items(user["id"])
 
-# @app.post("/items")
-# async def create_new_item(item_data: dict, user = Depends(get_current_user)):
-#     image_b64 = item_data.pop("image_base64", None)
-    
-#     item_data["user_id"] = user["id"]
-    
-#     if image_b64:
-#         try:
-#             if "," in image_b64:
-#                 header, base64_str = image_b64.split(",", 1)
-#                 ext = header.split(";")[0].split("/")[1]
-#             else:
-#                 base64_str = image_b64
-#                 ext = "jpg"
-            
-#             image_bytes = base64.b64decode(base64_str)
-            
-#             filename = f"item_{user['id']}_{uuid.uuid4().hex[:8]}.{ext}"
-            
-#             # Upload to a Supabase bucket named 'items'
-#             supabase.storage.from_("items").upload(
-#                 path=filename,
-#                 file=image_bytes,
-#                 file_options={"content-type": f"image/{ext}"}
-#             )
-            
-#             # Get the URL and attach it to the database payload
-#             public_url = supabase.storage.from_("items").get_public_url(filename)
-#             item_data["image_uri"] = public_url
-            
-#         except Exception as e:
-#             print(f"Item image upload failed: {e}")
-#             return JSONResponse(status_code=500, content={"error": "Failed to upload item image"})
-
-#     # 2. Save to the database
-#     return create_item(item_data)
-
 @app.delete("/items/{item_id}")
 async def remove_item(item_id: str, user = Depends(get_current_user)):
     return delete_item(item_id)
@@ -842,15 +805,9 @@ async def read_user_profile(user = Depends(get_current_user)):
 
 @app.put("/users/me")
 async def update_user_profile(update_data: dict, user = Depends(get_current_user)):
-    updated_profile = edit_user_profile(user["id"], update_data)
-    if updated_profile:
-        return updated_profile
-    return JSONResponse(status_code=400, content={"error": "Failed to update user profile"})
-
-@app.put("/users/me")
-async def update_user_profile(update_data: dict, user = Depends(get_current_user)):
     
-    avatar_b64 = update_data.pop("avatar_base64", None)
+    # Extract the base64 image string that the frontend sent as 'image_uri'
+    avatar_b64 = update_data.pop("image_uri", None)
     
     if avatar_b64:
         try:
@@ -861,20 +818,18 @@ async def update_user_profile(update_data: dict, user = Depends(get_current_user
                 base64_str = avatar_b64
                 ext = "jpg"
             
-            # Convert back to raw image bytes
             image_bytes = base64.b64decode(base64_str)
             
             filename = f"{user['id']}_{uuid.uuid4().hex[:8]}.{ext}"
             
-            # Upload directly to the Supabase storage bucket
-            supabase.storage.from_("avatars").upload(
+            supabase.storage.from_("images").upload(
                 path=filename,
                 file=image_bytes,
                 file_options={"content-type": f"image/{ext}"}
             )
             
-            public_url = supabase.storage.from_("avatars").get_public_url(filename)
-            update_data["image_uri"] = public_url
+            url_response = supabase.storage.from_("images").create_signed_url(filename, 315360000)
+            update_data["image_uri"] = url_response["signedURL"]
             
         except Exception as e:
             print(f"Avatar upload failed: {e}")

@@ -21,9 +21,9 @@ export function StorageItemCard({
       key={item.id}
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex items-center space-x-4"
+      className="bg-surface p-3 rounded-2xl border border-surface shadow-sm flex items-center space-x-4 active:scale-[0.98] transition-transform duration-200"
     >
-      <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 bg-slate-50 flex items-center justify-center">
+      <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 bg-background flex items-center justify-center shadow-sm">
         {item.type === "item" ? (
           <img
             src={`http://127.0.0.1:8000${item.image_uri}`}
@@ -31,25 +31,25 @@ export function StorageItemCard({
             className="w-full h-full object-cover"
           />
         ) : item.type === "video" ? (
-          <div className="bg-blue-50 w-full h-full flex items-center justify-center">
+          <div className="bg-primary/10 w-full h-full flex items-center justify-center">
             {item.video_uri === "processing" ? (
-              <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
+              <Loader2 className="w-6 h-6 text-primary animate-spin" />
             ) : (
-              <Video className="w-6 h-6 text-blue-500" />
+              <Video className="w-6 h-6 text-primary" />
             )}
           </div>
         ) : (
-          <Package className="w-6 h-6 text-slate-400" />
+          <Package className="w-6 h-6 text-muted" />
         )}
       </div>
 
       {/* Details Section */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <h4 className="font-bold text-slate-800 truncate">{item.name}</h4>
+          <h4 className="font-bold text-body truncate">{item.name}</h4>
           {/* Conditional "Seen By" Badge */}
           {item.seen_by && (
-            <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md font-medium uppercase">
+            <span className="text-[9px] bg-background text-muted px-1.5 py-0.5 rounded-md font-medium uppercase border border-surface">
               By {item.seen_by}
             </span>
           )}
@@ -57,10 +57,10 @@ export function StorageItemCard({
 
         {/* Location Row */}
         {item.location && (
-          <div className="flex items-center gap-1.5 mt-0.5 text-slate-500">
-            <MapPin className="w-3 h-3 text-[#3F62C7]" />
+          <div className="flex items-center gap-1.5 mt-0.5 text-muted">
+            <MapPin className="w-3 h-3 text-primary" />
             <span className="text-[11px] font-medium truncate">
-              {item.location.surface} <span className="text-slate-500">in</span>{" "}
+              {item.location.surface} <span className="text-muted/70">in</span>{" "}
               {item.location.room}
             </span>
           </div>
@@ -70,12 +70,12 @@ export function StorageItemCard({
         {(item.color || item.marterial || item.condition) && (
           <div className="flex flex-wrap gap-1 mt-1">
             {item.color && (
-              <span className="text-[10px] text-[#3F62C7] bg-blue-50 px-2 py-0.5 rounded-full">
+              <span className="text-[10px] text-primary bg-primary/10 px-2 py-0.5 rounded-full">
                 {item.color}
               </span>
             )}
             {item.marterial && (
-              <span className="text-[10px] text-slate-500 bg-slate-50 px-2 py-0.5 rounded-full">
+              <span className="text-[10px] text-muted bg-background px-2 py-0.5 rounded-full">
                 {item.marterial}
               </span>
             )}
@@ -83,8 +83,8 @@ export function StorageItemCard({
               <span
                 className={`text-[10px] px-2 py-0.5 rounded-full ${
                   item.condition.toLowerCase() === "good"
-                    ? "text-green-600 bg-green-50"
-                    : "text-orange-600 bg-orange-50"
+                    ? "text-success bg-green-50"
+                    : "text-warning bg-orange-50"
                 }`}
               >
                 {item.condition}
@@ -94,7 +94,7 @@ export function StorageItemCard({
         )}
 
         {/* Date Section */}
-        <div className="flex gap-2 text-[10px] text-slate-400 font-bold uppercase mt-2">
+        <div className="flex gap-2 text-[10px] text-muted font-bold uppercase mt-2">
           <span>
             {item.last_seen
               ? new Date(item.last_seen * 1000).toLocaleDateString()
@@ -114,7 +114,7 @@ export function StorageItemCard({
               item.name,
             )
           }
-          className="p-2 text-slate-400 hover:text-[#3F62C7] bg-slate-50 hover:bg-[#eff6ff] rounded-full transition-colors shrink-0 outline-none"
+          className="p-2 text-muted hover:text-primary bg-background hover:bg-surface hover:shadow-sm rounded-full transition-all duration-200 shrink-0 outline-none active:scale-95 border border-surface"
         >
           <Pencil className="w-4 h-4" />
         </button>
@@ -123,7 +123,7 @@ export function StorageItemCard({
         {item.type === "item" && (
           <button
             onClick={() => onDelete(item.id)}
-            className="p-2 text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 rounded-full transition-colors shrink-0 outline-none"
+            className="p-2 text-muted hover:text-red-500 bg-background hover:bg-red-50 hover:shadow-sm rounded-full transition-all duration-200 shrink-0 outline-none active:scale-95 border border-surface"
           >
             <Trash2 className="w-4 h-4" />
           </button>

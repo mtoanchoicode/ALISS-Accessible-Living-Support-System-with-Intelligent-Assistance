@@ -28,14 +28,14 @@ export function MessageBubble({ msg }: MessageBubbleProps) {
       <div
         className={`max-w-[85%] rounded-2xl p-3.5 ${
           isUser
-            ? "bg-[#3F62C7] text-white rounded-tr-sm shadow-md shadow-[#3F62C7]/10"
-            : "bg-white border border-slate-100 text-slate-800 rounded-tl-sm shadow-sm"
+            ? "bg-primary text-white rounded-tr-sm shadow-md shadow-primary/10"
+            : "bg-surface border border-surface text-body rounded-tl-sm shadow-sm"
         }`}
       >
         <p className="text-sm leading-relaxed">{msg.text}</p>
         <div
           className={`flex items-center justify-between mt-2 ${
-            isUser ? "text-[#dbeafe]" : "text-slate-400"
+            isUser ? "text-white/80" : "text-muted"
           }`}
         >
           <span className="text-[10px] font-medium">{msg.time}</span>
@@ -43,7 +43,7 @@ export function MessageBubble({ msg }: MessageBubbleProps) {
             <button
               onClick={playAudio}
               disabled={!msg.audio_base64}
-              className={`ml-2 hover:text-[#3F62C7] transition-colors ${
+              className={`ml-2 hover:text-primary transition-colors ${
                 !msg.audio_base64 ? "opacity-50 cursor-not-allowed" : ""
               }`}
             >

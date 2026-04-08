@@ -17,7 +17,6 @@ def get_video(video_id: str):
 
 def get_all_videos(user_id: str):
     try:
-        # Add the .eq("user_id", user_id) filter!
         response = supabase.table("videos").select("*").eq("user_id", user_id).execute()
         return response.data
     except Exception as e:
@@ -41,14 +40,12 @@ def upload_video_file(file_bytes: bytes, filename: str):
         ext = filename.split(".")[-1] if "." in filename else "mp4"
         unique_filename = f"{uuid.uuid4()}.{ext}"
         
-        # Target the explicit 'videos' storage bucket directly
         res = supabase.storage.from_("videos").upload(
             file=file_bytes, 
             path=unique_filename, 
             file_options={"content-type": f"video/{ext}"}
         )
         
-        # Hydrate matching public URL out
         public_url = supabase.storage.from_("videos").get_public_url(unique_filename)
         return {"status": "success", "url": public_url}
     except Exception as e:

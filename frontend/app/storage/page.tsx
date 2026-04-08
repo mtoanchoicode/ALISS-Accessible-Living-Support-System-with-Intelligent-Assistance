@@ -64,7 +64,7 @@ export default function StoragePage() {
       {activeTab === "videos" && (
         <button
           onClick={handleAddNewClick}
-          className="fixed bottom-24 right-4 bg-[#3F62C7] text-white p-4 rounded-full shadow-lg shadow-[#3F62C7]/30 hover:bg-[#3F62C7] hover:scale-105 active:scale-95 transition-all z-50 flex items-center justify-center"
+          className="fixed bottom-24 right-4 bg-primary text-white p-4 rounded-full shadow-md shadow-primary/30 active:scale-95 transition-all duration-200 z-50 flex items-center justify-center"
           aria-label="Upload video"
         >
           <Plus className="w-6 h-6" />

@@ -21,11 +21,11 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.variable}>
       <body
-        className="bg-slate-100 text-slate-900 font-sans antialiased"
+        className="bg-surface text-body font-sans antialiased"
         suppressHydrationWarning
       >
         <QueryProvider>
-          <div className="mx-auto max-w-[430px] bg-white h-[100dvh] shadow-2xl relative overflow-hidden flex flex-col">
+          <div className="mx-auto max-w-[430px] bg-background h-[100dvh] shadow-2xl relative overflow-hidden flex flex-col">
             <Header />
             <main className="flex-1 overflow-y-auto flex flex-col">{children}</main>
             <BottomNav />
