@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { User } from "lucide-react";
 // import { useAuth } from "@/hooks/useAuth"; // Not currently used, can comment out
 import { useUserProfile } from "@/hooks/useUserProfile";
+import { Skeleton } from "@/components/ui/Skeleton";
 import Image from "next/image";
 
 export default function Header() {
@@ -13,56 +14,40 @@ export default function Header() {
   const { profile, initials, isLoading } = useUserProfile();
 
   if (
-    pathname === "/" ||
-    pathname === "/register" ||
-    pathname === "/camera" ||
-    pathname === "/profile" ||
-    pathname === "/edit"
+    pathname !== "/home"
   ) {
     return null;
   }
 
-  const getTitle = () => {
-    switch (pathname) {
-      case "/home":
-        return "Home";
-      case "/chat":
-        return "Memory Assistant";
-      case "/camera":
-        return "Camera";
-      case "/live":
-        return "Home Monitor";
-      case "/storage":
-        return "Storage";
-      case "/profile":
-        return "Settings";
-      default:
-        return "ALISS";
-    }
-  };
+  // const getTitle = () => {
+  //   switch (pathname) {
+  //     case "/home":
+  //       return "Home";
+  //     default:
+  //       return "ALISS";
+  //   }
+  // };
 
   return (
-    <header className="shrink-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100 px-4 py-4 flex items-center justify-between">
-      <h1 className="text-xl font-semibold text-slate-800 tracking-tight">
-        {getTitle()}
+    <header className="shrink-0 z-50 bg-background/80 backdrop-blur-md border-b border-surface px-4 py-4 flex items-center justify-between">
+      <h1 className="text-xl font-semibold text-body tracking-tight">
+        {profile?.first_name}
       </h1>
 
       {pathname === "/home" && (
         <button
           onClick={() => router.push("/profile")}
-          // ADDED 'overflow-hidden' AND 'relative' TO ensure rounding
-          className="relative w-10 h-10 bg-[#dbeafe] rounded-full flex items-center justify-center text-[#3F62C7] hover:bg-[#bfdbfe] transition-colors overflow-hidden border border-blue-200 shadow-sm"
+          className="relative w-10 h-10 bg-surface rounded-full flex items-center justify-center text-primary hover:shadow-md active:scale-95 transition-all overflow-hidden border border-slate-100"
         >
-          {/* 2. The Fallback Avatar Logic */}
           {isLoading ? (
-            <div className="w-full h-full animate-pulse bg-blue-200 rounded-full" />
+            <Skeleton className="w-full h-full rounded-full" />
           ) : profile?.image_uri ? (
             <Image
               src={profile.image_uri}
-              alt={`${profile?.first_name || 'User'}'s avatar`}
+              alt={`${profile.first_name || "User"}'s avatar`}
               fill
-              sizes="40px" // Recommended for performance with 'fill' on small images
-              className="object-cover rounded-full" // Added 'rounded-full' here too for safety
+              sizes="40px"
+              className="object-cover rounded-full"
               onLoadingComplete={(img) => img.classList.remove("opacity-0")}
             />
           ) : initials ? (

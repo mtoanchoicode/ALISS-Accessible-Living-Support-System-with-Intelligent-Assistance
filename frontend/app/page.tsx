@@ -22,17 +22,17 @@ export default function Login() {
   } = useLoginForm();
 
   return (
-    <div className="flex-1 flex flex-col justify-center px-6 py-12 bg-white">
+    <div className="flex-1 flex flex-col justify-center px-6 py-12 bg-background">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
         <div className="mb-10 text-center">
-          <h2 className="text-3xl font-bold text-slate-900 tracking-tight">
+          <h2 className="text-3xl font-bold text-body tracking-tight">
             Welcome back
           </h2>
-          <p className="mt-2 text-slate-500">Sign in to ALISS</p>
+          <p className="mt-2 text-muted">Sign in to ALISS</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6 max-w-sm mx-auto">
@@ -44,20 +44,20 @@ export default function Login() {
 
           {/* Email Field */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
+            <label className="block text-sm font-medium text-body mb-2">
               Email <span className="text-red-500">*</span>
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Mail className="h-5 w-5 text-slate-400" />
+                <Mail className="h-5 w-5 text-muted" />
               </div>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 onBlur={() => handleBlur("email")}
-                className={`block w-full pl-10 pr-3 py-3 border rounded-xl focus:ring-2 bg-slate-50 text-slate-900 placeholder-slate-400 transition-colors ${
-                  touched.email && (!email || !isEmailValid) ? "border-red-500 focus:ring-red-500" : "border-slate-200 focus:ring-[#3F62C7] focus:border-[#3F62C7]"
+                className={`block w-full pl-10 pr-3 py-3 border rounded-xl focus:ring-2 bg-surface text-body placeholder-muted transition-colors ${
+                  touched.email && (!email || !isEmailValid) ? "border-red-500 focus:ring-red-500" : "border-slate-100 focus:ring-primary focus:border-primary"
                 }`}
                 placeholder="you@example.com"
               />
@@ -73,20 +73,20 @@ export default function Login() {
 
           {/* Password Field */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
+            <label className="block text-sm font-medium text-body mb-2">
               Password <span className="text-red-500">*</span>
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Lock className="h-5 w-5 text-slate-400" />
+                <Lock className="h-5 w-5 text-muted" />
               </div>
               <input
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 onBlur={() => handleBlur("password")}
-                className={`block w-full pl-10 pr-10 py-3 border rounded-xl focus:ring-2 bg-slate-50 text-slate-900 placeholder-slate-400 transition-colors ${
-                  touched.password && !password ? "border-red-500 focus:ring-red-500" : "border-slate-200 focus:ring-[#3F62C7] focus:border-[#3F62C7]"
+                className={`block w-full pl-10 pr-10 py-3 border rounded-xl focus:ring-2 bg-surface text-body placeholder-muted transition-colors ${
+                  touched.password && !password ? "border-red-500 focus:ring-red-500" : "border-slate-100 focus:ring-primary focus:border-primary"
                 }`}
                 placeholder="••••••••"
               />
@@ -96,9 +96,9 @@ export default function Login() {
                 onClick={toggleShowPassword}
               >
                 {showPassword ? (
-                  <EyeOff className="h-5 w-5 text-slate-400 hover:text-slate-600" />
+                  <EyeOff className="h-5 w-5 text-muted hover:text-body" />
                 ) : (
-                  <Eye className="h-5 w-5 text-slate-400 hover:text-slate-600" />
+                  <Eye className="h-5 w-5 text-muted hover:text-body" />
                 )}
               </button>
             </div>
@@ -111,17 +111,17 @@ export default function Login() {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl shadow-sm text-sm font-semibold text-white bg-[#3F62C7] hover:bg-[#3F62C7] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#3F62C7] transition-colors disabled:opacity-70"
+            className="w-full flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl shadow-sm text-sm font-semibold text-white bg-primary active:scale-95 hover:shadow-md transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-70"
           >
             {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Sign In"}
           </button>
         </form>
 
-        <p className="mt-8 text-center text-sm text-slate-500">
+        <p className="mt-8 text-center text-sm text-muted">
           Don&apos;t have an account?{" "}
           <Link
             href="/register"
-            className="font-semibold text-[#3F62C7] hover:text-[#3F62C7]"
+            className="font-semibold text-primary hover:text-azure transition-colors"
           >
             Create one now
           </Link>

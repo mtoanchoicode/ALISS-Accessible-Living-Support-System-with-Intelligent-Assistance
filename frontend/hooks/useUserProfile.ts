@@ -8,7 +8,7 @@ export function useUserProfile() {
   const router = useRouter();
 
   // 1. Data States
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [profile, setProfile] = useState<UserProfile>();
   const [isLoading, setIsLoading] = useState(true);
 
   // 2. Edit States
@@ -80,7 +80,7 @@ export function useUserProfile() {
 
       // If they picked a new image, encode it and pack it into the JSON
       if (selectedFile) {
-        updatePayload.avatar_base64 = await fileToBase64(selectedFile);
+        updatePayload.image_uri = await fileToBase64(selectedFile);
       }
 
       const updatedData = await userService.updateUserProfile(updatePayload);

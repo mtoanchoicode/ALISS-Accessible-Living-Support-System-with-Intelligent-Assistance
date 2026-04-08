@@ -10,18 +10,43 @@
   }
 }
 
-@layer base {
-  :root {
-    /* Brand Palette */
-    --color-blueberry: #3F62C7;
-    --color-caramel: #CC8957;
-    --color-brownie: #66452C;
-    --color-creamy: #F6E8D6;
+@theme {
+  /* Brand Palette - Clean-Tech */
+  --color-primary: #063093;
+  --color-azure: #1E90FF;
+  --color-success: #22C55E;
+  --color-warning: #F59E0B;
+  --color-body: #1E1E2D;
+  --color-surface: #fcfcfc;
+  --color-muted: #9CA3AF;
+  --color-background: #FFFFFF;
 
-    /* Semantic Aliases (Optional but recommended) */
-    --color-primary: #3F62C7;
-    --color-secondary: var(--color-caramel);
-    --color-surface: var(--color-creamy);
-    --color-text-main: var(--color-brownie);
+  --font-sans: "Inter", sans-serif;
+
+  --animate-shimmer: shimmer 1.5s infinite linear;
+
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+}
+
+@layer base {
+  body {
+    background-color: var(--color-background);
+    color: var(--color-body);
+    font-family: var(--font-sans);
+    line-height: 1.5;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: 700;
+    letter-spacing: -0.025em; /* Tight tracking */
+  }
+
+  /* Utilities overrides if needed */
+  .text-muted {
+    color: var(--color-muted);
+    font-size: 0.875rem; 
   }
 }

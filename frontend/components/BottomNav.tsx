@@ -20,7 +20,7 @@ export default function BottomNav() {
   }
 
   return (
-    <nav className="w-full shrink-0 mt-auto bg-white border-t border-slate-200 pb-safe z-50">
+    <nav className="w-full shrink-0 mt-auto bg-background shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] border-t border-surface pb-safe z-50">
       <div className="flex justify-around items-center h-16 relative px-2">
         {navItems.map((item) => {
           const Icon = item.icon;
@@ -32,12 +32,12 @@ export default function BottomNav() {
               href={item.href}
               className={`flex flex-col items-center justify-center w-16 h-full space-y-1 transition-colors ${
                 isActive
-                  ? "text-[#3F62C7]"
-                  : "text-slate-400 hover:text-slate-600"
+                  ? "text-primary"
+                  : "text-muted hover:text-body"
               }`}
             >
               <Icon
-                className={`w-6 h-6 ${isActive ? "fill-[#eff6ff] stroke-[#3F62C7]" : ""}`}
+                className={`w-6 h-6 ${isActive ? "fill-primary/10 stroke-primary" : ""}`}
                 strokeWidth={isActive ? 2.5 : 2}
               />
               <span className="text-[10px] font-medium">{item.name}</span>

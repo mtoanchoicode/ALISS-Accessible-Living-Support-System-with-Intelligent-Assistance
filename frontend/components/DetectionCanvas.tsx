@@ -33,10 +33,10 @@ export default function DetectionCanvas({
       const { x, y, width, height } = obj.bbox;
       const isSelected = obj.id === selectedObjectId;
       ctx.lineWidth = isSelected ? 4 : 2;
-      ctx.strokeStyle = isSelected ? "#10b981" : "#ef4444";
+      ctx.strokeStyle = isSelected ? "#1E90FF" : "rgba(30, 144, 255, 0.5)";
       ctx.fillStyle = isSelected
-        ? "rgba(16, 185, 129, 0.2)"
-        : "rgba(239, 68, 68, 0.1)";
+        ? "rgba(30, 144, 255, 0.25)"
+        : "rgba(30, 144, 255, 0.1)";
 
       ctx.beginPath();
       ctx.rect(x, y, width, height);

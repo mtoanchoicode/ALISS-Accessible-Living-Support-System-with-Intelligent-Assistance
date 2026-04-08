@@ -17,10 +17,13 @@ export const videoService = {
     });
   },
 
-  uploadVideo: (name: string, file: File): Promise<any> => {
+  uploadVideo: (name: string, file: File, location?: string): Promise<any> => {
     const formData = new FormData();
     formData.append("name", name);
     formData.append("file", file);
+    if (location) {
+      formData.append("location", location);
+    }
 
     return apiClient("/videos/upload", {
       method: "POST",
