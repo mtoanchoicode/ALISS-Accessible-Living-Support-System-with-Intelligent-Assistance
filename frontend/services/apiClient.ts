@@ -1,4 +1,4 @@
-const BASE_URL = "https://plans-grad-engine-signature.trycloudflare.com";
+const BASE_URL = "https://qty-smoking-ext-carpet.trycloudflare.com";
 
 export const apiClient = async (
   endpoint: string,
