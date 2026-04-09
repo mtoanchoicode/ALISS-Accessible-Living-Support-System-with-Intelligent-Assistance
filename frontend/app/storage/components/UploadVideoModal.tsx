@@ -59,19 +59,19 @@ export function UploadVideoModal({ isOpen, onClose, onUpload }: UploadVideoModal
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50"
+            className="fixed inset-0 bg-background/80 backdrop-blur-md z-50"
           />
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm bg-white rounded-3xl p-6 shadow-xl z-50"
+            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-sm bg-surface rounded-3xl p-6 shadow-2xl border border-background z-50"
           >
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold text-slate-900">Upload Video</h3>
+              <h3 className="text-xl font-bold text-body">Upload Video</h3>
               <button
                 onClick={onClose}
-                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors outline-none"
+                className="p-2 text-muted hover:text-body hover:bg-background rounded-full transition-colors outline-none"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -83,21 +83,21 @@ export function UploadVideoModal({ isOpen, onClose, onUpload }: UploadVideoModal
               <div 
                 className={`w-full border-2 border-dashed rounded-xl flex flex-col items-center justify-center p-6 transition-all ${
                   selectedFile 
-                    ? "border-[#3F62C7] bg-[#eff6ff]" 
-                    : "border-slate-200 bg-slate-50 hover:bg-slate-100 hover:border-slate-300 cursor-pointer"
+                    ? "border-primary bg-primary/5" 
+                    : "border-background bg-background hover:bg-surface hover:border-primary/30 cursor-pointer"
                 }`}
                 onClick={() => !selectedFile && fileInputRef.current?.click()}
               >
                 {selectedFile ? (
                   <div className="flex flex-col items-center space-y-3">
-                    <div className="w-12 h-12 bg-white rounded-full shadow-sm flex items-center justify-center text-[#3F62C7]">
+                    <div className="w-12 h-12 bg-surface rounded-full shadow-sm flex items-center justify-center text-primary">
                       <FileVideo className="w-6 h-6" />
                     </div>
                     <div className="text-center">
-                      <p className="text-sm font-bold text-slate-900 line-clamp-1 max-w-[200px]">
+                      <p className="text-sm font-bold text-body line-clamp-1 max-w-[200px]">
                         {selectedFile.name}
                       </p>
-                      <p className="text-xs font-semibold text-slate-400 mt-0.5">
+                      <p className="text-xs font-semibold text-muted mt-0.5">
                         {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
                       </p>
                     </div>
@@ -115,12 +115,12 @@ export function UploadVideoModal({ isOpen, onClose, onUpload }: UploadVideoModal
                   </div>
                 ) : (
                   <div className="flex flex-col items-center text-center space-y-3 pointer-events-none">
-                    <div className="w-12 h-12 bg-white rounded-full shadow-sm flex items-center justify-center text-slate-400">
+                    <div className="w-12 h-12 bg-surface rounded-full shadow-sm flex items-center justify-center text-muted">
                       <UploadCloud className="w-6 h-6" />
                     </div>
                     <div>
-                      <p className="text-sm font-bold text-slate-700">Tap to select video</p>
-                      <p className="text-xs font-medium text-slate-400 mt-1">MP4, WebM, MOV</p>
+                      <p className="text-sm font-bold text-body">Tap to select video</p>
+                      <p className="text-xs font-medium text-muted mt-1">MP4, WebM, MOV</p>
                     </div>
                   </div>
                 )}
@@ -135,32 +135,32 @@ export function UploadVideoModal({ isOpen, onClose, onUpload }: UploadVideoModal
 
               {/* Title Input */}
               <div className="space-y-2">
-                <label className="text-sm font-bold text-slate-600 ml-1">Video Title</label>
+                <label className="text-sm font-bold text-muted ml-1">Video Title</label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Enter a descriptive title"
-                  className="w-full bg-slate-50 border border-slate-200 px-4 py-3 text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-[#3F62C7] focus:border-transparent transition-all rounded-xl"
+                  className="w-full bg-background border border-surface px-4 py-3 text-body font-semibold focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all rounded-xl placeholder-muted"
                 />
               </div>
 
               {/* Location Input */}
               <div className="space-y-2">
-                <label className="text-sm font-bold text-slate-600 ml-1">Location (Optional)</label>
+                <label className="text-sm font-bold text-muted ml-1">Location (Optional)</label>
                 <input
                   type="text"
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
                   placeholder="E.g., Living Room, Kitchen"
-                  className="w-full bg-slate-50 border border-slate-200 px-4 py-3 text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-[#3F62C7] focus:border-transparent transition-all rounded-xl"
+                  className="w-full bg-background border border-surface px-4 py-3 text-body font-semibold focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all rounded-xl placeholder-muted"
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={isUploading || !name.trim() || !selectedFile}
-                className="w-full flex items-center justify-center py-3.5 bg-[#3F62C7] text-white rounded-xl font-bold hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-70"
+                className="w-full flex items-center justify-center py-3.5 bg-primary text-white rounded-xl font-bold hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-70 disabled:hover:brightness-100 shadow-md shadow-primary/20"
               >
                 {isUploading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />

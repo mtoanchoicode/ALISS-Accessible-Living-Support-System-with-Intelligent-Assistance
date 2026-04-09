@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import Header from "@/components/Header";
 import BottomNav from "@/components/BottomNav";
 import "flag-icons/css/flag-icons.min.css";
 import QueryProvider from "@/providers/QueryProvider";
@@ -26,8 +25,9 @@ export default function RootLayout({
       >
         <QueryProvider>
           <div className="mx-auto max-w-[430px] bg-background h-[100dvh] shadow-2xl relative overflow-hidden flex flex-col">
-            {/* <Header /> */}
-            <main className="flex-1 overflow-y-auto flex flex-col">{children}</main>
+            <main className="flex-1 overflow-y-auto flex flex-col">
+              {children}
+            </main>
             <BottomNav />
           </div>
         </QueryProvider>
