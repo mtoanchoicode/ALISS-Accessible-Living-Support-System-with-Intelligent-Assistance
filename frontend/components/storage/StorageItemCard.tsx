@@ -56,7 +56,7 @@ export function StorageItemCard({
       <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 bg-background flex items-center justify-center shadow-sm">
         {item.type === "item" ? (
           <img
-            src={`https://plans-grad-engine-signature.trycloudflare.com${item.image_uri}`}
+            src={`https://qty-smoking-ext-carpet.trycloudflare.com${item.image_uri}`}
             alt={item.name}
             className="w-full h-full object-cover"
           />
