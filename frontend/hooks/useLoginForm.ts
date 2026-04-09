@@ -59,7 +59,7 @@ export function useLoginForm() {
       if (response.access_token) {
         authService.saveToken(response.access_token, response.user_id);
         
-        setTimeout(() => router.push("/home"), 2000);
+        setTimeout(() => router.push("/"), 2000);
       } else {
         setErrorMsg("Invalid email or password. Please try again.");
       }

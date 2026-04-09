@@ -1,13 +1,13 @@
 "use client";
 
 import React from "react";
-import Webcam from "react-webcam";
+import { Camera } from "react-camera-pro";
 import { DetectedObject } from "@/types/detection";
 import DetectionCanvas from "./DetectionCanvas";
 import { Loader2, CameraOff } from "lucide-react";
 
 interface CameraViewProps {
-  webcamRef: React.RefObject<Webcam | null>;
+  webcamRef: React.RefObject<any>;
   isModelLoaded: boolean;
   objects: DetectedObject[];
   videoDimensions: { width: number; height: number };
@@ -58,29 +58,15 @@ export default function CameraView({
       )}
 
       <div className="relative flex items-center justify-center w-full h-full">
-        <Webcam
-          ref={webcamRef}
-          audio={false}
-          screenshotFormat="image/jpeg"
-          videoConstraints={{
-            facingMode: facingMode,
-            width: {
-              ideal:
-                typeof window !== "undefined" && window.innerWidth < 768
-                  ? 1080
-                  : 1920,
-            },
-            height: {
-              ideal:
-                typeof window !== "undefined" && window.innerWidth < 768
-                  ? 1920
-                  : 1080,
-            },
-          }}
-          onUserMedia={handleUserMedia}
-          onLoadedMetadata={handleUserMedia}
-          className="block w-full h-auto max-h-full object-contain"
-        />
+        <div className="absolute inset-0 w-full h-full z-0 overflow-hidden bg-black flex items-center justify-center">
+          <Camera
+            ref={webcamRef}
+            facingMode={facingMode}
+            aspectRatio="cover"
+            errorMessages={{}}
+            videoReadyCallback={handleUserMedia}
+          />
+        </div>
         {isModelLoaded && videoDimensions.width > 0 && (
           <div className="absolute inset-0 flex items-center justify-center">
             <DetectionCanvas
@@ -88,8 +74,9 @@ export default function CameraView({
               videoWidth={videoDimensions.width}
               videoHeight={videoDimensions.height}
               onObjectClick={(obj) => {
-                if (webcamRef.current?.video) {
-                  onObjectSelect(obj, webcamRef.current.video);
+                const video = document.querySelector("video");
+                if (video) {
+                  onObjectSelect(obj, video);
                 }
               }}
               selectedObjectId={selectedObjectId}

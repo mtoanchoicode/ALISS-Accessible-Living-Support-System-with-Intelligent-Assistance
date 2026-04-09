@@ -36,7 +36,7 @@ export default function ProfilePage() {
         {/* Header (Keep interactive so user can go back while loading) */}
         <header className="px-4 py-4 flex items-center justify-between bg-surface border-b border-surface sticky top-0 z-10 shadow-sm">
           <button
-            onClick={() => router.push("/home")}
+            onClick={() => router.push("/")}
             className="p-2 text-muted hover:text-body rounded-full transition-colors"
           >
             <ArrowLeft className="w-6 h-6" />
@@ -93,7 +93,7 @@ export default function ProfilePage() {
     <div className="min-h-screen flex flex-col bg-background">
       <header className="px-4 py-4 flex items-center justify-between bg-surface border-b border-surface sticky top-0 z-10 shadow-sm">
         <button
-          onClick={() => router.push("/home")}
+          onClick={() => router.push("/")}
           className="p-2 text-muted hover:text-body rounded-full transition-colors"
         >
           <ArrowLeft className="w-6 h-6" />
