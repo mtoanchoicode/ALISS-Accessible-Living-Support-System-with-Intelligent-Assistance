@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import Webcam from "react-webcam";
+import { CameraType } from "react-camera-pro";
 import { loadModel, detectObjects } from "@/lib/yoloModel";
 import { DetectedObject, ItemSavePayload } from "@/types/detection";
 import { captureSnapshot } from "@/lib/detectionUtils";
@@ -19,7 +19,7 @@ export function useCamera() {
   const [selectedRoom, setSelectedRoom] = useState<string>("Living Room");
 
   // --- YOLO AI Detection State ---
-  const webcamRef = useRef<Webcam>(null);
+  const webcamRef = useRef<any>(null);
   const requestRef = useRef<number>(0);
   const [isModelLoaded, setIsModelLoaded] = useState(false);
   const [objects, setObjects] = useState<DetectedObject[]>([]);
@@ -44,7 +44,7 @@ export function useCamera() {
   }, [isCameraActive]);
 
   const detectFrame = useCallback(async () => {
-    const video = webcamRef.current?.video;
+    const video = document.querySelector("video");
     if (video && video.readyState === 4 && isModelLoaded && isCameraActive) {
       const detected = await detectObjects(video);
       setObjects(detected);
@@ -60,7 +60,7 @@ export function useCamera() {
 
   // --- Utility & Event Handlers ---
   const handleUserMedia = () => {
-    const video = webcamRef.current?.video;
+    const video = document.querySelector("video");
     if (video) {
       setVideoDimensions({
         width: video.videoWidth,

@@ -14,14 +14,14 @@ export default function Header() {
   const { profile, initials, isLoading } = useUserProfile();
 
   if (
-    pathname !== "/home"
+    pathname !== "/"
   ) {
     return null;
   }
 
   // const getTitle = () => {
   //   switch (pathname) {
-  //     case "/home":
+  //     case "/":
   //       return "Home";
   //     default:
   //       return "ALISS";
@@ -34,7 +34,7 @@ export default function Header() {
         {profile?.first_name}
       </h1>
 
-      {pathname === "/home" && (
+      {pathname === "/" && (
         <button
           onClick={() => router.push("/profile")}
           className="relative w-10 h-10 bg-surface rounded-full flex items-center justify-center text-primary hover:shadow-md active:scale-95 transition-all overflow-hidden border border-slate-100"

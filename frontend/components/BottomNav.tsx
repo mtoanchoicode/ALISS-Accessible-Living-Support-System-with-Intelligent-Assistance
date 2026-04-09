@@ -8,14 +8,20 @@ export default function BottomNav() {
   const pathname = usePathname();
 
   const navItems = [
-    { name: "Home", href: "/home", icon: Home },
+    { name: "Home", href: "/", icon: Home },
     { name: "Camera", href: "/camera", icon: Camera, isMain: true },
     { name: "Chat", href: "/chat", icon: MessageSquare },
     { name: "Storage", href: "/storage", icon: Database },
   ];
 
   // Don't show nav on auth pages
-  if (pathname === "/" || pathname === "/register" || pathname === "/camera" || pathname === "/profile"|| pathname === "/edit") {
+  if (
+    pathname === "/login" ||
+    pathname === "/register" ||
+    pathname === "/camera" ||
+    pathname === "/profile" ||
+    pathname === "/edit"
+  ) {
     return null;
   }
 
@@ -31,9 +37,7 @@ export default function BottomNav() {
               key={item.name}
               href={item.href}
               className={`flex flex-col items-center justify-center w-16 h-full space-y-1 transition-colors ${
-                isActive
-                  ? "text-primary"
-                  : "text-muted hover:text-body"
+                isActive ? "text-primary" : "text-muted hover:text-body"
               }`}
             >
               <Icon
