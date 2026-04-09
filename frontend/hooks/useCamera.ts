@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { CameraType } from "react-camera-pro";
-import { loadModel, detectObjects } from "@/lib/yoloModel";
 import { DetectedObject, ItemSavePayload } from "@/types/detection";
 import { captureSnapshot } from "@/lib/detectionUtils";
 import { visionService } from "@/services/visionService";
@@ -20,7 +19,9 @@ export function useCamera() {
 
   // --- YOLO AI Detection State ---
   const webcamRef = useRef<any>(null);
+  const workerRef = useRef<Worker | null>(null);
   const requestRef = useRef<number>(0);
+  const isDetectingRef = useRef<boolean>(false);
   const [isModelLoaded, setIsModelLoaded] = useState(false);
   const [objects, setObjects] = useState<DetectedObject[]>([]);
   const objectsRef = useRef<DetectedObject[]>([]);
@@ -30,11 +31,28 @@ export function useCamera() {
   });
   const [error, setError] = useState<string | null>(null);
 
-  // --- Initialization & TF.js ---
+  // --- Initialization & TF.js via Web Worker ---
   useEffect(() => {
-    loadModel()
-      .then(() => setIsModelLoaded(true))
-      .catch((err) => setError("Failed to load detection model."));
+    workerRef.current = new Worker(new URL('../lib/yoloWorker.ts', import.meta.url));
+
+    workerRef.current.onmessage = (e) => {
+      const { type, objects: detectedData, error: workerErr } = e.data;
+      if (type === "LOADED") {
+        setIsModelLoaded(true);
+      } else if (type === "RESULT") {
+        setObjects(detectedData);
+        objectsRef.current = detectedData;
+        isDetectingRef.current = false;
+      } else if (type === "ERROR") {
+        setError("AI Model Error: " + workerErr);
+      }
+    };
+
+    workerRef.current.postMessage({ type: "INIT" });
+
+    return () => {
+      workerRef.current?.terminate();
+    };
   }, []);
 
   useEffect(() => {
@@ -45,10 +63,21 @@ export function useCamera() {
 
   const detectFrame = useCallback(async () => {
     const video = document.querySelector("video");
-    if (video && video.readyState === 4 && isModelLoaded && isCameraActive) {
-      const detected = await detectObjects(video);
-      setObjects(detected);
-      objectsRef.current = detected;
+    if (video && video.readyState === 4 && isModelLoaded && isCameraActive && !isDetectingRef.current) {
+      isDetectingRef.current = true;
+      try {
+        const bitmap = await createImageBitmap(video);
+        workerRef.current?.postMessage({
+          type: "DETECT",
+          payload: {
+            bitmap,
+            videoWidth: video.videoWidth,
+            videoHeight: video.videoHeight
+          }
+        }, [bitmap]);
+      } catch (e) {
+        isDetectingRef.current = false;
+      }
     }
     requestRef.current = requestAnimationFrame(detectFrame);
   }, [isModelLoaded, isCameraActive]);

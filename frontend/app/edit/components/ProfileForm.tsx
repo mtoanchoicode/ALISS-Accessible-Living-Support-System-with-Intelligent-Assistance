@@ -8,7 +8,7 @@ interface ProfileFormProps {
   setFirstName: (name: string) => void;
   lastName: string;
   setLastName: (name: string) => void;
-  profile: UserProfile | null;
+  profile: UserProfile | null | undefined;
 }
 
 export function ProfileForm({ firstName, setFirstName, lastName, setLastName, profile }: ProfileFormProps) {
@@ -54,7 +54,7 @@ export function ProfileForm({ firstName, setFirstName, lastName, setLastName, pr
               type="email" 
               value={profile?.email || ""}
               disabled
-              className="w-full bg-slate-100 border-b border-slate-100 pl-4 py-3 text-slate-900 font-semibold cursor-not-allowe rounded-lg"
+              className="w-full bg-slate-100 border-b border-slate-100 pl-4 py-3 text-slate-900 font-semibold cursor-not-allowed rounded-lg"
             />
           </div>
         </div>
