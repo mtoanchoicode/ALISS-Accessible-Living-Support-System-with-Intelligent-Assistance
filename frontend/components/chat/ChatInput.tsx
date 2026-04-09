@@ -1,6 +1,9 @@
 "use client";
 
-import { Send, Mic } from "lucide-react";
+import { Send, Mic, MicOff } from "lucide-react";
+import "regenerator-runtime/runtime";
+import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
+import { useEffect } from "react";
 
 interface ChatInputProps {
   input: string;
@@ -15,8 +18,29 @@ export function ChatInput({
   onChange,
   onSubmit,
 }: ChatInputProps) {
+  const { transcript, listening, resetTranscript, browserSupportsSpeechRecognition } = useSpeechRecognition();
+
+  useEffect(() => {
+    if (listening && transcript) {
+      onChange(transcript);
+    }
+  }, [transcript, listening, onChange]);
+
+  const toggleListening = () => {
+    if (!browserSupportsSpeechRecognition) {
+      alert("Browser doesn't support speech recognition.");
+      return;
+    }
+    if (listening) {
+      SpeechRecognition.stopListening();
+    } else {
+      resetTranscript();
+      SpeechRecognition.startListening({ continuous: true });
+    }
+  };
+
   return (
-    <div className="fixed bottom-16 left-0 right-0 bg-background/80 backdrop-blur-md border-t border-surface p-3 z-40 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.02)]">
+    <div className="fixed bottom-0 left-0 right-0 bg-background/80 backdrop-blur-md border-t border-surface p-3 z-40 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.02)]">
       <form
         onSubmit={onSubmit}
         className="flex items-end space-x-2 max-w-md mx-auto"
@@ -31,9 +55,11 @@ export function ChatInput({
           />
           <button
             type="button"
-            className="p-1.5 text-muted hover:text-primary transition-colors shrink-0"
+            onClick={toggleListening}
+            title="Voice input"
+            className={`p-1.5 transition-colors shrink-0 ${listening ? "text-primary animate-pulse" : "text-muted hover:text-primary"}`}
           >
-            <Mic className="w-5 h-5" />
+            {listening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
           </button>
         </div>
         <button

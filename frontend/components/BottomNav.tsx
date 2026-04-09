@@ -14,13 +14,13 @@ export default function BottomNav() {
     { name: "Storage", href: "/storage", icon: Database },
   ];
 
-  // Don't show nav on auth pages
   if (
     pathname === "/login" ||
     pathname === "/register" ||
     pathname === "/camera" ||
     pathname === "/profile" ||
-    pathname === "/edit"
+    pathname === "/edit" ||
+    pathname.startsWith("/chat/")
   ) {
     return null;
   }

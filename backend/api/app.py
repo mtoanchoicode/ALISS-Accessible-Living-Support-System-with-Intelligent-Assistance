@@ -542,8 +542,20 @@ def chats_v2(body: ChatV2Request, user: dict = Depends(get_current_user)):
         save_message(session_id, "ai", answer, user["id"])
         
         if state.turn == 1:
+            try:
+                title_prompt = f"Summarize this query into a concise 2-4 word chat title. Do not wrap in quotes or add extra punctuation. Query: '{user_msg}'"
+                resp = client.chat.completions.create(
+                    model=OPENAI_MODEL,
+                    messages=[{"role": "user", "content": title_prompt}],
+                    temperature=0.3,
+                    max_tokens=10,
+                )
+                title = resp.choices[0].message.content.strip().replace('"', '')
+            except Exception as title_err:
+                print(f"Warning: Failed to generate title: {title_err}")
                 title = user_msg[:30] + ("..." if len(user_msg) > 30 else "")
-                update_session_title(session_id, title, user["id"])
+                
+            update_session_title(session_id, title, user["id"])
 
         return {
             "session_id": session_id,

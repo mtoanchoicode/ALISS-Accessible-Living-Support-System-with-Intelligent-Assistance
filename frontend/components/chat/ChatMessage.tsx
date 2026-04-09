@@ -1,8 +1,10 @@
 "use client";
 
 import { motion } from "motion/react";
-import { Volume2 } from "lucide-react";
+import { Volume2, Loader2 } from "lucide-react";
 import { Message } from "@/types/chat";
+import { chatService } from "@/services/chatService";
+import { useState } from "react";
 
 interface MessageBubbleProps {
   msg: Message;
@@ -10,13 +12,36 @@ interface MessageBubbleProps {
 
 export function MessageBubble({ msg }: MessageBubbleProps) {
   const isUser = msg.sender === "user";
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoadingAudio, setIsLoadingAudio] = useState(false);
 
-  function playAudio() {
-    if (!msg.audio_base64 || !msg.audio_mime) return;
-    const audio = new window.Audio(
-      `data:${msg.audio_mime};base64,${msg.audio_base64}`,
-    );
-    audio.play().catch((e) => console.error("Audio playback failed", e));
+  async function playAudio() {
+    if (isPlaying || isLoadingAudio) return;
+    
+    try {
+      setIsLoadingAudio(true);
+      let audioSrc = "";
+      
+      if (msg.audio_base64 && msg.audio_mime) {
+        audioSrc = `data:${msg.audio_mime};base64,${msg.audio_base64}`;
+      } else {
+        const blob = await chatService.speech(msg.text);
+        audioSrc = URL.createObjectURL(blob);
+      }
+      
+      const audio = new window.Audio(audioSrc);
+      
+      audio.onplay = () => setIsPlaying(true);
+      audio.onended = () => setIsPlaying(false);
+      audio.onerror = () => setIsPlaying(false);
+      
+      await audio.play();
+    } catch (e) {
+      console.error("Audio playback failed", e);
+      setIsPlaying(false);
+    } finally {
+      setIsLoadingAudio(false);
+    }
   }
 
   return (
@@ -42,12 +67,13 @@ export function MessageBubble({ msg }: MessageBubbleProps) {
           {!isUser && (
             <button
               onClick={playAudio}
-              disabled={!msg.audio_base64}
-              className={`ml-2 hover:text-primary transition-colors ${
-                !msg.audio_base64 ? "opacity-50 cursor-not-allowed" : ""
-              }`}
+              disabled={isLoadingAudio}
+              className={`ml-2 transition-colors ${
+                isPlaying ? "text-primary animate-pulse" : "hover:text-primary"
+              } ${isLoadingAudio ? "opacity-50 cursor-not-allowed" : ""}`}
+              title="Read aloud"
             >
-              <Volume2 className="w-3.5 h-3.5" />
+              {isLoadingAudio ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Volume2 className="w-3.5 h-3.5" />}
             </button>
           )}
         </div>
