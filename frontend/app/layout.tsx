@@ -26,7 +26,7 @@ export default function RootLayout({
       >
         <QueryProvider>
           <div className="mx-auto max-w-[430px] bg-background h-[100dvh] shadow-2xl relative overflow-hidden flex flex-col">
-            <Header />
+            {/* <Header /> */}
             <main className="flex-1 overflow-y-auto flex flex-col">{children}</main>
             <BottomNav />
           </div>

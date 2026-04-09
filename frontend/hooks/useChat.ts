@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { chatService } from "@/services/chatService";
+import { useRouter } from "next/navigation";
 
 export type Message = {
   id: string;
@@ -18,10 +19,12 @@ export type ChatSession = {
   messages: Message[];
 };
 
-export function useChat() {
+export function useChat(givenSessionId?: string | null) {
+  const router = useRouter();
   const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(givenSessionId || null);
   const [currentMessages, setCurrentMessages] = useState<Message[]>([]);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
@@ -59,12 +62,31 @@ export function useChat() {
   }, [fetchSessions]);
 
   useEffect(() => {
+    if (givenSessionId) {
+      setCurrentSessionId(givenSessionId);
+    }
+  }, [givenSessionId]);
+
+  useEffect(() => {
     const loadMessages = async () => {
+      let hasOptimisticState = false;
+      if (typeof window !== "undefined" && currentSessionId) {
+        const optimisticStr = sessionStorage.getItem(`optimistic_${currentSessionId}`);
+        if (optimisticStr) {
+          setCurrentMessages(JSON.parse(optimisticStr));
+          sessionStorage.removeItem(`optimistic_${currentSessionId}`);
+          hasOptimisticState = true;
+        }
+      }
+
       if (!currentSessionId || currentSessionId === "new") {
-        if (currentSessionId !== "new") setCurrentMessages([]);
+        if (currentSessionId === "new" && !hasOptimisticState) setCurrentMessages([]);
+        setIsLoadingMessages(false);
         return;
       }
+      
       try {
+        if (!hasOptimisticState) setIsLoadingMessages(true);
         const msgs = await chatService.getSessionMessages(currentSessionId);
         const mapped = (msgs || []).map((m: any) => ({
           id: m.id,
@@ -78,6 +100,8 @@ export function useChat() {
         setCurrentMessages(mapped);
       } catch (e) {
         console.error("Failed to load messages:", e);
+      } finally {
+        setIsLoadingMessages(false);
       }
     };
     loadMessages();
@@ -132,18 +156,7 @@ export function useChat() {
   }, [streamingMessageId, displayedText, currentMessages]);
 
   const createNewChat = () => {
-    setCurrentSessionId("new");
-    setCurrentMessages([
-      {
-        id: "greeting",
-        text: "Hello! I am ALISS. How can I help you find something today?",
-        sender: "ai",
-        time: new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-      },
-    ]);
+    router.push("/chat/new");
   };
 
   // --- NEW: Fully wired deleteSession ---
@@ -180,7 +193,13 @@ export function useChat() {
         minute: "2-digit",
       }),
     };
-    setCurrentMessages((prev) => [...prev, newUserMsg]);
+    
+    // We capture the current state so we can serialize it during redirect
+    let prevLocalState: Message[] = [];
+    setCurrentMessages((prev) => {
+      prevLocalState = [...prev, newUserMsg];
+      return prevLocalState;
+    });
 
     try {
       let activeSessionId = currentSessionId;
@@ -192,10 +211,6 @@ export function useChat() {
       }
 
       const response = await chatService.chatV2(activeSessionId, userText);
-
-      if (currentSessionId === "new") {
-        fetchSessions();
-      }
 
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
@@ -209,7 +224,15 @@ export function useChat() {
         audio_mime: response.audio_mime,
       };
 
-      setCurrentMessages((prev) => [...prev, aiResponse]);
+      if (currentSessionId === "new") {
+         if (typeof window !== "undefined") {
+            sessionStorage.setItem(`optimistic_${activeSessionId}`, JSON.stringify([...prevLocalState, aiResponse]));
+         }
+        router.replace("/chat/" + activeSessionId);
+        fetchSessions();
+      } else {
+         setCurrentMessages((prev) => [...prev, aiResponse]);
+      }
       setStreamingMessageId(aiResponse.id);
       setDisplayedText("");
     } catch (err) {
@@ -252,6 +275,7 @@ export function useChat() {
     deleteSession,
     handleSend,
     isSending,
+    isLoadingMessages,
     streamingMessageId,
   };
 }

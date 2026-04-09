@@ -7,14 +7,18 @@ import {
   Bell,
   ArrowRight,
   ShieldCheck,
+  User,
 } from "lucide-react";
 import Link from "next/link";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { Skeleton } from "@/components/ui/Skeleton";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
 
 export default function HomePage() {
   // Assuming useUserProfile returns an isLoading boolean
-  const { profile, isLoading } = useUserProfile();
+  const { profile, initials, isLoading } = useUserProfile();
+  const router = useRouter();
 
   if (isLoading) {
     return (
@@ -24,6 +28,9 @@ export default function HomePage() {
           <div className="space-y-2">
             <Skeleton className="h-7 w-32" />
             <Skeleton className="h-5 w-48" />
+          </div>
+          <div>
+            <Skeleton className="w-10 h-10 rounded-full" />
           </div>
         </div>
 
@@ -77,14 +84,35 @@ export default function HomePage() {
   // --- Actual Page Content ---
   return (
     <div className="p-4 space-y-6">
-      {/* <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Good morning,</h2>
           <p className="text-slate-500">
             {profile ? `${profile.first_name} ${profile.last_name}` : "Guest"}
           </p>
         </div>
-      </div> */}
+        <button
+          onClick={() => router.push("/profile")}
+          className="relative w-10 h-10 bg-surface rounded-full flex items-center justify-center text-primary hover:shadow-md active:scale-95 transition-all overflow-hidden border border-slate-100"
+        >
+          {isLoading ? (
+            <Skeleton className="w-full h-full rounded-full" />
+          ) : profile?.image_uri ? (
+            <Image
+              src={profile.image_uri}
+              alt={`${profile.first_name || "User"}'s avatar`}
+              fill
+              sizes="40px"
+              className="object-cover rounded-full"
+              onLoadingComplete={(img) => img.classList.remove("opacity-0")}
+            />
+          ) : initials ? (
+            <span className="font-bold text-sm">{initials}</span>
+          ) : (
+            <User className="w-5 h-5" />
+          )}
+        </button>
+      </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-primary rounded-3xl p-5 text-white shadow-sm shadow-primary/20 active:scale-95 hover:shadow-md transition-all duration-200 cursor-pointer">
@@ -173,9 +201,7 @@ export default function HomePage() {
                 <item.icon className="w-5 h-5" />
               </div>
               <div className="flex-1 min-w-0">
-                <h4 className="font-medium text-body text-sm">
-                  {item.title}
-                </h4>
+                <h4 className="font-medium text-body text-sm">{item.title}</h4>
                 <p className="text-xs text-muted truncate">{item.desc}</p>
               </div>
               <span className="text-[10px] text-muted whitespace-nowrap ml-2">
