@@ -30,8 +30,11 @@ export const itemService = {
   },
 
   deleteItem: (id: string): Promise<any> => {
-    return apiClient(`/memoryv2/object/${encodeURIComponent(id)}`, {
+    return apiClient(`/memoryv2/object`, {
       method: "DELETE",
+      body: JSON.stringify({
+        node_id: id,
+      }),
     });
   }
 };
