@@ -406,8 +406,8 @@ def delete_graph_object(
 # Chat (+ optional TTS in same response)
 # -------------------------------------------------------------------
 
-# @app.post("/chat")
-# def chat(body: ChatRequest, user = Depends(get_current_user)):
+@app.post("/chat")
+def chat(body: ChatRequest, user = Depends(get_current_user)):
     user_msg = body.message.strip()
     k = body.k
 
@@ -504,9 +504,7 @@ def delete_graph_object(
 # -------------------------------------------------------------------
 # Chat v2 (+ optional TTS in same response)
 # -------------------------------------------------------------------
-search_v2_memory = load_graph(Path(GRAPH_SAVE_PATH))
-search_v2_retriever = GraphMemoryRetriever(search_v2_memory)
-search_v2_resolver = GraphEntityResolver(search_v2_retriever)
+
 
 SEARCH_V2_SESSIONS: Dict[str, ConversationState] = defaultdict(ConversationState)
 
@@ -516,6 +514,9 @@ class ChatV2Request(BaseModel):
 
 @app.post("/chats_v2")
 def chats_v2(body: ChatV2Request, user: dict = Depends(get_current_user)):
+    search_v2_memory = load_graph(Path(GRAPH_SAVE_PATH))
+    search_v2_retriever = GraphMemoryRetriever(search_v2_memory)
+    search_v2_resolver = GraphEntityResolver(search_v2_retriever)
     session_id = body.session_id
     user_msg = body.message.strip()
 

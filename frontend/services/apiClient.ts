@@ -1,4 +1,4 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://172.16.3.63:8000";
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://qty-smoking-ext-carpet.trycloudflare.com";
 
 export const apiClient = async (
   endpoint: string,

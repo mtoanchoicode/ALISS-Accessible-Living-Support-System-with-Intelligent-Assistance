@@ -32,7 +32,9 @@ export function StorageItemCard({
             exit={{ opacity: 0 }}
             className="absolute inset-0 bg-background/95 backdrop-blur-sm z-10 flex flex-col items-center justify-center p-4 text-center rounded-2xl border border-red-500/10"
           >
-            <p className="text-body font-bold text-sm mb-3">Delete this {item.type}?</p>
+            <p className="text-body font-bold text-sm mb-3">
+              Delete this {item.type}?
+            </p>
             <div className="flex gap-2">
               <button
                 onClick={() => setShowDeleteConfirm(false)}
@@ -56,7 +58,7 @@ export function StorageItemCard({
       <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 bg-background flex items-center justify-center shadow-sm">
         {item.type === "item" ? (
           <img
-            src={`http://127.0.0.1:8000${item.image_uri}`}
+            src={`https://qty-smoking-ext-carpet.trycloudflare.com${item.image_uri}`}
             alt={item.name}
             className="w-full h-full object-cover"
           />
