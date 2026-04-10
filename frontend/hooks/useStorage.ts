@@ -77,9 +77,13 @@ export function useStorage(isChecking: boolean) {
     }
   };
 
-  const handleDeleteItem = async (id: string) => {
+  const handleDeleteItem = async (id: string, type: "item" | "video") => {
     try {
-      await deleteItemMutation.mutateAsync(id);
+      if (type === "item") {
+        await deleteItemMutation.mutateAsync(id);
+      } else {
+        await deleteVideoMutation.mutateAsync(id);
+      }
     } catch (err) {
       console.error("Failed to delete item:", err);
     }
@@ -96,6 +100,14 @@ export function useStorage(isChecking: boolean) {
     onSuccess: () => {
       // Invalidate the "items" query to refresh the list automatically
       queryClient.invalidateQueries({ queryKey: ["items"] });
+    },
+  });
+
+  const deleteVideoMutation = useMutation({
+    mutationFn: (id: string) => videoService.deleteVideo(id),
+    onSuccess: () => {
+      // Invalidate the "videos" query to refresh the list automatically
+      queryClient.invalidateQueries({ queryKey: ["videos"] });
     },
   });
 
