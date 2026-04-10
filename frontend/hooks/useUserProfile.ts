@@ -1,45 +1,44 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { userService } from "@/services/userService";
 import { authService } from "@/services/authService";
 import { UserProfile } from "@/types";
 
+// Shared query key constant — ensures all consumers hit the same cache slot.
+export const USER_PROFILE_KEY = ["userProfile"] as const;
+
 export function useUserProfile() {
   const router = useRouter();
+  const queryClient = useQueryClient();
 
-  // 1. Data States
-  const [profile, setProfile] = useState<UserProfile>();
-  const [isLoading, setIsLoading] = useState(true);
+  // 1. Data Fetching via useQuery — deduplicated, cached, and synchronized
+  //    across all components that call useUserProfile().
+  const {
+    data: profile,
+    isLoading,
+  } = useQuery<UserProfile>({
+    queryKey: USER_PROFILE_KEY,
+    queryFn: userService.getUserProfile,
+  });
 
-  // 2. Edit States
+  // 2. Edit States (local to the editing form)
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
 
   // 3. Auth States
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  // --- Initializers ---
+  // Sync local edit states when the profile data first arrives or updates
   useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const data = await userService.getUserProfile();
-        setProfile(data);
-
-        // Sync local edit states automatically
-        setFirstName(data.first_name || "");
-        setLastName(data.last_name || "");
-        if (data.image_uri) setAvatarPreview(data.image_uri);
-      } catch (error) {
-        console.error("Failed to load user profile:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchProfile();
-  }, []);
+    if (profile) {
+      setFirstName(profile.first_name || "");
+      setLastName(profile.last_name || "");
+      if (profile.image_uri) setAvatarPreview(profile.image_uri);
+    }
+  }, [profile]);
 
   const getInitials = (first?: string, last?: string) => {
     if (!first && !last) return "";
@@ -66,31 +65,38 @@ export function useUserProfile() {
     });
   };
 
-  // --- Edit Actions ---
+  // --- Profile Update Mutation ---
+  const updateProfileMutation = useMutation({
+    mutationFn: async (payload: Partial<UserProfile> & { image_uri?: string }) => {
+      return userService.updateUserProfile(payload);
+    },
+    onSuccess: (updatedData) => {
+      // Immediately update the cached profile so all consumers see new data.
+      queryClient.setQueryData(USER_PROFILE_KEY, updatedData);
+    },
+  });
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      setIsSaving(true);
-
-      // We use 'any' here temporarily so TypeScript doesn't complain about the new avatar_base64 field
       const updatePayload: any = {
         first_name: firstName,
         last_name: lastName,
       };
 
-      // If they picked a new image, encode it and pack it into the JSON
       if (selectedFile) {
         updatePayload.image_uri = await fileToBase64(selectedFile);
       }
 
-      const updatedData = await userService.updateUserProfile(updatePayload);
-      setProfile(updatedData);
+      await updateProfileMutation.mutateAsync(updatePayload);
 
+      // Cache is already updated via onSuccess.
+      // router.refresh() ensures Next.js server components also pick up
+      // the new data, eliminating the flash-of-stale-content race condition.
+      router.refresh();
       router.push("/profile");
     } catch (error) {
       console.error("Failed to update profile", error);
-    } finally {
-      setIsSaving(false);
     }
   };
 
@@ -98,9 +104,7 @@ export function useUserProfile() {
   const handleLogout = async () => {
     setIsLoggingOut(true);
     try {
-      await authService.logoutApi();
-      authService.logout();
-      router.push("/");
+      await authService.logout();
     } catch (error) {
       console.error("Failed to log out:", error);
     } finally {
@@ -121,7 +125,7 @@ export function useUserProfile() {
     lastName,
     setLastName,
     avatarPreview,
-    isSaving,
+    isSaving: updateProfileMutation.isPending,
     handleImageChange,
     handleSave,
   };

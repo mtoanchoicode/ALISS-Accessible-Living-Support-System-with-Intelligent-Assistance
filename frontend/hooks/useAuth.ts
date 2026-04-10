@@ -1,13 +1,17 @@
 import { useEffect, useState } from "react";
-import { authService } from "@/services/authService";
+import { createClient } from "@/utils/supabase/client";
 
 export function useAuth() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isChecking, setIsChecking] = useState(true);
 
   useEffect(() => {
-    const token = authService.getToken();
-    setIsAuthenticated(!!token);
+    const supabase = createClient();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setIsAuthenticated(!!session);
+      setIsChecking(false);
+    });
   }, []);
 
-  return { isAuthenticated };
-}
+  return { isAuthenticated, isChecking };
+}
