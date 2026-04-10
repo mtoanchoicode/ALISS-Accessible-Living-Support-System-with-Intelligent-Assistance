@@ -1,6 +1,7 @@
+
 import { getSessionToken, logoutAction } from "@/app/actions/auth";
 
-const BASE_URL = "http://127.0.0.1:8000";
+const BASE_URL = "https://qty-smoking-ext-carpet.trycloudflare.com";
 
 export const apiClient = async (
   endpoint: string,
