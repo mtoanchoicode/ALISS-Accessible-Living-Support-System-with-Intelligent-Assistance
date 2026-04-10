@@ -140,8 +140,10 @@ export function useStorage(isChecking: boolean) {
     setEditingItem(null);
   };
 
-  const handleUploadVideo = async (name: string, file: File, location?: string) => {
-    await uploadVideoMutation.mutateAsync({ name, file, location });
+  const handleUploadVideo = async (videos: { name: string; file: File; location?: string }[]) => {
+    await Promise.all(
+      videos.map((v) => uploadVideoMutation.mutateAsync({ name: v.name, file: v.file, location: v.location }))
+    );
     setIsUploadingVideo(false);
   };
 
