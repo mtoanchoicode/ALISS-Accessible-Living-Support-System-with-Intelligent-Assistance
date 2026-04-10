@@ -372,34 +372,27 @@ def update_graph_object(
 class DeleteGraphObjectRequest(BaseModel):
     node_id: str
 
-@app.delete("/memoryv2/object/{node_id}")
-def delete_graph_object_path(
-    node_id: str,
-    user = Depends(get_current_user)
-):
-    return perform_graph_delete(node_id)
-
 @app.delete("/memoryv2/object")
-def delete_graph_object_body(
+def delete_graph_object(
     payload: DeleteGraphObjectRequest,
     user = Depends(get_current_user)
 ):
-    return perform_graph_delete(payload.node_id)
-
-def perform_graph_delete(nid: str):
     try:
+        nid = payload.node_id
+
         if nid not in memory.graph:
-            return JSONResponse({"error": f"Node '{nid}' not found"}, status_code=404)
+            return JSONResponse({"error": "Node not found"}, status_code=404)
 
         # 1. Remove from memory
         memory.graph.remove_node(nid)
 
-        # 2. SAVE TO DISK
+        # 2. SAVE TO DISK (The missing step)
         try:
-             # Assuming save_graph is available in scope (matches original code)
+            # Assuming you have a save_graph function defined elsewhere
             save_graph(memory, str(GRAPH_SAVE_PATH))
         except Exception as save_error:
             print(f"Warning: Node deleted in RAM but failed to save to disk: {save_error}")
+            # You might still return success, or throw an error depending on preference
 
         return {
             "status": "deleted",
