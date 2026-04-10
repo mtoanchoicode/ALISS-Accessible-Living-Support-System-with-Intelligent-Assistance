@@ -14,7 +14,6 @@ export function useRegisterForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  const [successMsg, setSuccessMsg] = useState("");
 
   const [formData, setFormData] = useState({
     firstName: "",
@@ -38,6 +37,8 @@ export function useRegisterForm() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+    // Clear error when user starts typing again
+    if (errorMsg) setErrorMsg("");
   };
 
   const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
@@ -55,41 +56,65 @@ export function useRegisterForm() {
       password: true,
     });
 
+    // Client-side validation
+    if (!formData.firstName || !formData.lastName) {
+      setErrorMsg("First name and last name are required.");
+      return;
+    }
+    if (!formData.email || !isEmailValid) {
+      setErrorMsg("Please enter a valid email address.");
+      return;
+    }
+    if (!formData.phone || !isPhoneValid) {
+      setErrorMsg("Please enter a valid phone number.");
+      return;
+    }
+    if (!passwordCriteria.isValid) {
+      setErrorMsg("Password does not meet all requirements.");
+      return;
+    }
+
     setIsLoading(true);
     setErrorMsg("");
-    setSuccessMsg("");
 
     try {
       const fullPhone = formatPhoneForBackend(formData.phone);
 
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("TIMEOUT")), 5000),
-      );
-      const response = (await Promise.race([
-        authService.register({
-          first_name: formData.firstName,
-          last_name: formData.lastName,
-          phone: fullPhone,
-          email: formData.email,
-          password: formData.password,
-        }),
-        timeoutPromise,
-      ])) as any;
+      // Step 1: Register
+      const response = await authService.register({
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        phone: fullPhone,
+        email: formData.email,
+        password: formData.password,
+      });
 
-      if (response.status === "success") {
-        setSuccessMsg("Account created! Redirecting to login...");
+      if (response.status !== "success") {
+        setErrorMsg(response.message || "Registration failed. Please try again.");
+        return;
+      }
+
+      // Step 2: Auto-login after successful registration
+      const loginResponse = await authService.login(formData.email, formData.password);
+
+      if (loginResponse.access_token) {
+        authService.saveToken(loginResponse.access_token, loginResponse.user_id);
+        router.refresh();
+        router.push("/");
       } else {
-        setErrorMsg(
-          response.message || "Registration failed. Please try again.",
-        );
+        // Registration succeeded but auto-login failed — redirect to login page
+        setErrorMsg("Account created but auto-login failed. Please log in manually.");
+        setTimeout(() => router.push("/login"), 2000);
       }
     } catch (error: any) {
-      if (error.message === "TIMEOUT") {
-        setErrorMsg(
-          "The server is taking too long to respond. Please try again.",
-        );
+      // apiClient throws on non-2xx responses — extract the message
+      const msg = error.message || "";
+      if (msg.includes("API call failed")) {
+        setErrorMsg("Email already in use or registration failed. Please try again.");
+      } else if (msg === "TIMEOUT") {
+        setErrorMsg("The server is taking too long to respond. Please try again.");
       } else {
-        setErrorMsg(error.message || "An unexpected error occurred.");
+        setErrorMsg(msg || "An unexpected error occurred.");
       }
     } finally {
       setIsLoading(false);
@@ -102,7 +127,6 @@ export function useRegisterForm() {
     showPassword,
     isLoading,
     errorMsg,
-    successMsg,
     formData,
     touched,
     passwordCriteria,

@@ -1,20 +1,11 @@
-
-import { getSessionToken, logoutAction } from "@/app/actions/auth";
-
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://qty-smoking-ext-carpet.trycloudflare.com";
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
 export const apiClient = async (
   endpoint: string,
   options: RequestInit = {},
 ) => {
-  let token = null;
-  try {
-    // This Server Action fetches the access token from the secure Supabase HttpOnly cookie.
-    // It automatically performs a silent token refresh in the background if the session is expired.
-    token = await getSessionToken();
-  } catch (e) {
-    console.warn("Failed to get session token", e);
-  }
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("aliss_token") : null;
 
   const headers: Record<string, string> = {
     ...((options.headers as Record<string, string>) || {}),
@@ -28,38 +19,25 @@ export const apiClient = async (
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  let response = await fetch(`${BASE_URL}${endpoint}`, {
+  const response = await fetch(`${BASE_URL}${endpoint}`, {
     ...options,
     headers,
   });
 
   if (response.status === 401) {
-    // If the token is still rejected by FastAPI (e.g. revoked manually or out of sync),
-    // attempt a second refresh fetch just in case before failing.
-    try {
-      token = await getSessionToken();
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-        response = await fetch(`${BASE_URL}${endpoint}`, {
-          ...options,
-          headers,
-        });
-      }
-    } catch {}
-
-    if (response.status === 401) {
-      const errText = await response.text();
-      console.error("Authentication failed 401:", errText);
-      if (typeof window !== "undefined") {
-        console.log("ALISS API 401 Unauthorized Error: " + errText);
-        await logoutAction();
-        window.location.href = "/login";
-      }
-      throw new Error("Unauthorized");
+    const errText = await response.text();
+    console.error("Authentication failed 401:", errText);
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("aliss_token");
+      localStorage.removeItem("aliss_token_expires");
+      document.cookie = "aliss_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+      window.location.href = "/login";
     }
+    throw new Error("Unauthorized");
   }
 
   if (!response.ok) {
+    console.error(`API Error: [${response.status}] ${response.statusText} at ${BASE_URL}${endpoint}`);
     throw new Error(`API call failed: ${response.statusText}`);
   }
 

@@ -4,7 +4,7 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
 interface StorageItemCardProps {
   item: any;
   onEdit: (id: string, type: "item" | "video", name: string) => void;
-  onDelete: (id: string) => void;
+  onDelete: (id: string, type: "item" | "video") => void;
   activeTab: string;
 }
 
@@ -122,7 +122,7 @@ export function StorageItemCard({
         {/* Delete Button - Only show for items */}
         {item.type === "item" && (
           <button
-            onClick={() => onDelete(item.id)}
+            onClick={() => onDelete(item.id, item.type as "item" | "video")}
             className="p-2 text-muted hover:text-red-500 bg-background hover:bg-red-500/10 hover:shadow-sm rounded-full transition-all duration-200 shrink-0 outline-none active:scale-95 border border-surface"
           >
             <Trash2 className="w-4 h-4" />
