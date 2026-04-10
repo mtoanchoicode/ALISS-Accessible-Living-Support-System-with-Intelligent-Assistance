@@ -97,7 +97,7 @@ if __name__ == "__main__":
     parser.add_argument("--video", required=True, help="Path to input video file")
     parser.add_argument("--location", default="Test Room", help="Room label for events")
     parser.add_argument("--reid-only", action="store_true", help="Test ReID tracking only (no pose/object models needed)")
-    parser.add_argument("--out", default="output_annotated.mp4", help="Output annotated video path")
+    parser.add_argument("--out", default="Test_output_annotated.mp4", help="Output annotated video path")
     args = parser.parse_args()
 
     video_path = Path(args.video)

@@ -12,3 +12,5 @@ env/
 *.pkl
 
 memory_images/
+
+input/

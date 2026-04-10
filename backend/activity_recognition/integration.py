@@ -5,6 +5,7 @@ detection to produce named hold/release interaction events from a video.
 
 from __future__ import annotations
 
+from cProfile import label
 import math
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -17,7 +18,26 @@ from ultralytics import YOLO
 from torchreid.metrics import compute_distance_matrix
 
 
+LABEL_MAP = {  
+    # bag
+    "handbag": "bag",
+    "backpack": "bag",
+    "suitcase": "bag",
+
+    "wine glass": "cup",
+    # phone
+    "cell phone": "phone",
+    "mobile phone": "phone",}
+
+
+# - Class name normalization (mirrors Object_detection_indoor.py) ──────────────────
+def normalize_label(label: str) -> str:
+    new_label = label.lower().strip()
+    return LABEL_MAP.get(new_label, new_label)
+
+
 # ── Geometry helpers (mirrors Object_detection_indoor.py) ──────────────────
+
 
 def _box_area(box: Tuple) -> float:
     x1, y1, x2, y2 = box
@@ -305,6 +325,7 @@ class IntegratedVideoProcessor:
                     for box in r.boxes:
                         ox1, oy1, ox2, oy2 = map(int, box.xyxy[0])
                         label = self.object_model.names[int(box.cls[0])]
+                        label = normalize_label(label)
                         cached_object_boxes.append(((ox1, oy1, ox2, oy2), label))
 
             # ── 3. Pose detection (throttled) ────────────────────────────
@@ -482,9 +503,14 @@ class IntegratedVideoProcessor:
 
         filtered: List[Dict] = []
         for key, start_ev in first_start.items():
-            filtered.append(start_ev)
             if key in last_end:
-                filtered.append(last_end[key])
+                start_time = datetime.fromisoformat(start_ev["time"])
+                end_time = datetime.fromisoformat(last_end[key]["time"])
+
+                time_diff = (end_time - start_time).total_seconds()
+                if time_diff > 1.0:  # end must be at least 1 second after start
+                    filtered.append(start_ev)
+                    filtered.append(last_end[key])
 
         filtered.sort(key=lambda e: e["time"])
         return filtered
