@@ -1,21 +1,35 @@
+import { type NextRequest } from "next/server";
+import { updateSession } from "@/utils/supabase/middleware";
 import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
 
-export function middleware(request: NextRequest) {
-  const token = request.cookies.get("aliss_token")?.value;
+export async function middleware(request: NextRequest) {
+  const { supabaseResponse, user } = await updateSession(request);
+
   const path = request.nextUrl.pathname;
-
   const isAuthPage = path === "/login" || path === "/register";
 
-  if (!token && !isAuthPage) {
-    return NextResponse.redirect(new URL("/login", request.url));
+  if (!user && !isAuthPage) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    const redirectRes = NextResponse.redirect(url);
+    // Persist any cookies set by Supabase
+    supabaseResponse.cookies.getAll().forEach(cookie => {
+        redirectRes.cookies.set(cookie.name, cookie.value, { ...cookie, options: undefined } as any);
+    });
+    return redirectRes;
   }
 
-  if (token && isAuthPage) {
-    return NextResponse.redirect(new URL("/", request.url));
+  if (user && isAuthPage) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/";
+    const redirectRes = NextResponse.redirect(url);
+    supabaseResponse.cookies.getAll().forEach(cookie => {
+        redirectRes.cookies.set(cookie.name, cookie.value, { ...cookie, options: undefined } as any);
+    });
+    return redirectRes;
   }
 
-  return NextResponse.next();
+  return supabaseResponse;
 }
 
 export const config = {

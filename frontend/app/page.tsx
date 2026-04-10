@@ -14,11 +14,14 @@ import { useUserProfile } from "@/hooks/useUserProfile";
 import { Skeleton } from "@/components/ui/Skeleton";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+import { itemService } from "@/services/itemService";
 
 export default function HomePage() {
   // Assuming useUserProfile returns an isLoading boolean
   const { profile, initials, isLoading } = useUserProfile();
   const router = useRouter();
+  const { data: items = [] } = useQuery({ queryKey: ["items"], queryFn: itemService.getAllItems });
 
   if (isLoading) {
     return (
@@ -122,7 +125,7 @@ export default function HomePage() {
         </div>
         <div className="bg-surface rounded-3xl p-5 border border-slate-100 shadow-sm active:scale-95 hover:shadow-md transition-all duration-200 cursor-pointer">
           <Search className="w-8 h-8 mb-4 text-warning" />
-          <h3 className="text-3xl font-bold text-body mb-1">12</h3>
+          <h3 className="text-3xl font-bold text-body mb-1">{items.length}</h3>
           <p className="text-muted text-sm font-medium">Objects Tracked</p>
         </div>
       </div>

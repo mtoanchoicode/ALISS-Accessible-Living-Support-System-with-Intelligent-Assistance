@@ -51,18 +51,17 @@ export function useLoginForm() {
         setTimeout(() => reject(new Error("TIMEOUT")), 5000)
       );
 
-      const response = (await Promise.race([
+      await Promise.race([
         authService.login(cleanEmail, password),
         timeoutPromise,
-      ])) as any;
+      ]);
 
-      if (response.access_token) {
-        authService.saveToken(response.access_token, response.user_id);
-        
-        setTimeout(() => router.push("/"), 2000);
-      } else {
-        setErrorMsg("Invalid email or password. Please try again.");
-      }
+      // The Server Action has set the HttpOnly session cookie.
+      // Refresh the Next.js router cache so middleware detects the new session,
+      // then navigate — this eliminates the race condition where router.push
+      // runs before the cache knows about the authenticated state.
+      router.refresh();
+      router.push("/");
     } catch (error: any) {
       
       if (error.message === "TIMEOUT") {

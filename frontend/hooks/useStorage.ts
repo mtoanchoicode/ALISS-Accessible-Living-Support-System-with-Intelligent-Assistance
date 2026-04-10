@@ -78,13 +78,10 @@ export function useStorage(isChecking: boolean) {
   };
 
   const handleDeleteItem = async (id: string) => {
-    if (window.confirm("Are you sure you want to delete this item?")) {
-      try {
-        await deleteItemMutation.mutateAsync(id);
-      } catch (err) {
-        console.error("Failed to delete item:", err);
-        console.log("Error deleting item. Please try again.");
-      }
+    try {
+      await deleteItemMutation.mutateAsync(id);
+    } catch (err) {
+      console.error("Failed to delete item:", err);
     }
   };
 
