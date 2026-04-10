@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 
 # Retrieval layer
 try:
-    from query.search import search as kb_search
+    # from query.search import search as kb_search
     # Vision ingestion
     from vision.context_builder import describe_and_save
     from vision.v2_graph_context_builder import save_graph, load_graph, process_and_remember_observation
@@ -406,100 +406,100 @@ def delete_graph_object(
 # Chat (+ optional TTS in same response)
 # -------------------------------------------------------------------
 
-@app.post("/chat")
-def chat(body: ChatRequest, user = Depends(get_current_user)):
-    user_msg = body.message.strip()
-    k = body.k
+# @app.post("/chat")
+# def chat(body: ChatRequest, user = Depends(get_current_user)):
+#     user_msg = body.message.strip()
+#     k = body.k
 
-    if not user_msg:
-        return JSONResponse({"error": "Empty message"}, status_code=400)
+#     if not user_msg:
+#         return JSONResponse({"error": "Empty message"}, status_code=400)
 
-    # 1. Connect or Initialize DB Session
-    session_id = body.session_id
-    if not session_id:
-        title = user_msg[:30] + ("..." if len(user_msg) > 30 else "")
-        new_session = create_session(user["id"], title)
-        if not new_session:
-            return JSONResponse({"error": "Failed to create DB session"}, status_code=500)
-        session_id = new_session["id"]
+#     # 1. Connect or Initialize DB Session
+#     session_id = body.session_id
+#     if not session_id:
+#         title = user_msg[:30] + ("..." if len(user_msg) > 30 else "")
+#         new_session = create_session(user["id"], title)
+#         if not new_session:
+#             return JSONResponse({"error": "Failed to create DB session"}, status_code=500)
+#         session_id = new_session["id"]
         
-    save_message(session_id, "user", user_msg)
+#     save_message(session_id, "user", user_msg)
 
-    # 2. Extract ephemeral contextual memory map
-    state = SESSIONS[session_id]
-    state["turn"] = state.get("turn", 0) + 1
+#     # 2. Extract ephemeral contextual memory map
+#     state = SESSIONS[session_id]
+#     state["turn"] = state.get("turn", 0) + 1
 
-    # retrieval on first turn (or if evidence missing)
-    if state["turn"] == 1 or not state.get("last_evidence"):
-        rows = kb_search(user_msg, k=k)
-        evidence = rows_to_evidence(rows)
+#     # retrieval on first turn (or if evidence missing)
+#     if state["turn"] == 1 or not state.get("last_evidence"):
+#         rows = kb_search(user_msg, k=k)
+#         evidence = rows_to_evidence(rows)
 
-        if not evidence:
-            state["last_question"] = user_msg
-            state["last_evidence"] = []
-            no_record_ans = "I don’t have any records for that yet."
-            save_message(session_id, "ai", no_record_ans)
-            return {
-                "session_id": session_id,
-                "turn": state["turn"],
-                "answer": no_record_ans,
-                "evidence": [],
-                "audio_base64": None,
-                "audio_mime": None,
-            }
+#         if not evidence:
+#             state["last_question"] = user_msg
+#             state["last_evidence"] = []
+#             no_record_ans = "I don’t have any records for that yet."
+#             save_message(session_id, "ai", no_record_ans)
+#             return {
+#                 "session_id": session_id,
+#                 "turn": state["turn"],
+#                 "answer": no_record_ans,
+#                 "evidence": [],
+#                 "audio_base64": None,
+#                 "audio_mime": None,
+#             }
 
-        state["last_question"] = user_msg
-        state["last_evidence"] = evidence
+#         state["last_question"] = user_msg
+#         state["last_evidence"] = evidence
 
-    evidence = state["last_evidence"]
+#     evidence = state["last_evidence"]
 
-    context = "\n".join(
-        f"[{e['ts']}] {e['location']} — {e['object']}. {e['background']} (score={e['score']:.3f})"
-        for e in evidence
-    )
+#     context = "\n".join(
+#         f"[{e['ts']}] {e['location']} — {e['object']}. {e['background']} (score={e['score']:.3f})"
+#         for e in evidence
+#     )
 
-    prompt = (
-        "You are ALISS.\n"
-        "Use ONLY the evidence below.\n\n"
-        f"Question: {user_msg}\n\n"
-        f"EVIDENCE:\n{context}\n\n"
-        "Answer concisely (1–3 sentences)."
-    )
+#     prompt = (
+#         "You are ALISS.\n"
+#         "Use ONLY the evidence below.\n\n"
+#         f"Question: {user_msg}\n\n"
+#         f"EVIDENCE:\n{context}\n\n"
+#         "Answer concisely (1–3 sentences)."
+#     )
 
-    try:
-        resp = client.chat.completions.create(
-            model=OPENAI_MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.2,
-            max_tokens=200,
-        )
-        answer_text = resp.choices[0].message.content.strip()
-    except Exception as e:
-        answer_text = f"Error generating answer: {e}"
+#     try:
+#         resp = client.chat.completions.create(
+#             model=OPENAI_MODEL,
+#             messages=[{"role": "user", "content": prompt}],
+#             temperature=0.2,
+#             max_tokens=200,
+#         )
+#         answer_text = resp.choices[0].message.content.strip()
+#     except Exception as e:
+#         answer_text = f"Error generating answer: {e}"
 
-    audio_b64 = None
-    audio_mime = None
-    if body.with_tts and answer_text and not answer_text.startswith("Error generating answer"):
-        try:
-            voice = body.tts_voice or TTS_VOICE
-            mp3 = tts_mp3_bytes(answer_text, voice=voice)
-            audio_b64 = base64.b64encode(mp3).decode("utf-8")
-            audio_mime = "audio/mpeg"
-        except Exception:
-            audio_b64 = None
-            audio_mime = None
+#     audio_b64 = None
+#     audio_mime = None
+#     if body.with_tts and answer_text and not answer_text.startswith("Error generating answer"):
+#         try:
+#             voice = body.tts_voice or TTS_VOICE
+#             mp3 = tts_mp3_bytes(answer_text, voice=voice)
+#             audio_b64 = base64.b64encode(mp3).decode("utf-8")
+#             audio_mime = "audio/mpeg"
+#         except Exception:
+#             audio_b64 = None
+#             audio_mime = None
 
-    # 3. Finalize DB Pipeline
-    save_message(session_id, "ai", answer_text)
+#     # 3. Finalize DB Pipeline
+#     save_message(session_id, "ai", answer_text)
 
-    return {
-        "session_id": session_id,
-        "turn": state["turn"],
-        "answer": answer_text,
-        "evidence": evidence,
-        "audio_base64": audio_b64,
-        "audio_mime": audio_mime,
-    }
+#     return {
+#         "session_id": session_id,
+#         "turn": state["turn"],
+#         "answer": answer_text,
+#         "evidence": evidence,
+#         "audio_base64": audio_b64,
+#         "audio_mime": audio_mime,
+#     }
 
 # -------------------------------------------------------------------
 # Chat v2 (+ optional TTS in same response)
