@@ -1,6 +1,6 @@
 import { motion } from "motion/react";
 import { Video, Package, Loader2, MapPin, Pencil, Trash2 } from "lucide-react";
-
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
 interface StorageItemCardProps {
   item: any;
   onEdit: (id: string, type: "item" | "video", name: string) => void;
@@ -26,7 +26,7 @@ export function StorageItemCard({
       <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 bg-background flex items-center justify-center shadow-sm">
         {item.type === "item" ? (
           <img
-            src={`https://qty-smoking-ext-carpet.trycloudflare.com${item.image_uri}`}
+            src={`${BASE_URL}${item.image_uri}`}
             alt={item.name}
             className="w-full h-full object-cover"
           />
