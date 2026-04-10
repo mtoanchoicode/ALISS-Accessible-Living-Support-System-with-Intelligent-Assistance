@@ -4,7 +4,11 @@ import { motion } from "motion/react";
 import { Volume2, Loader2 } from "lucide-react";
 import { Message } from "@/types/chat";
 import { chatService } from "@/services/chatService";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+
+// Global references to manage a singleton audio instance and prevent multiplexing/memory bloat
+let globalAudio: HTMLAudioElement | null = null;
+let globalPlaybackCleanup: (() => void) | null = null;
 
 interface MessageBubbleProps {
   msg: Message;
@@ -15,30 +19,103 @@ export function MessageBubble({ msg }: MessageBubbleProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
 
+  // Cleanup on unmount if this component is playing audio
+  useEffect(() => {
+    return () => {
+      if (isPlaying && globalPlaybackCleanup) {
+        if (globalAudio) {
+          globalAudio.pause();
+          globalAudio.removeAttribute("src");
+          globalAudio.load();
+          globalAudio = null;
+        }
+        globalPlaybackCleanup();
+        globalPlaybackCleanup = null;
+      }
+    };
+  }, [isPlaying]);
+
   async function playAudio() {
-    if (isPlaying || isLoadingAudio) return;
+    // If this specific message is already playing, toggle it off
+    if (isPlaying) {
+      if (globalAudio) {
+        globalAudio.pause();
+        globalAudio.removeAttribute("src");
+        globalAudio.load();
+      }
+      if (globalPlaybackCleanup) {
+        globalPlaybackCleanup();
+        globalPlaybackCleanup = null;
+      }
+      globalAudio = null;
+      return;
+    }
+
+    if (isLoadingAudio) return;
     
     try {
       setIsLoadingAudio(true);
+      
+      // Stop any globally playing audio to prevent overlapping voices
+      if (globalAudio) {
+        globalAudio.pause();
+        globalAudio.removeAttribute("src");
+        globalAudio.load();
+      }
+      if (globalPlaybackCleanup) {
+        globalPlaybackCleanup();
+      }
+
       let audioSrc = "";
+      let isBlob = false;
       
       if (msg.audio_base64 && msg.audio_mime) {
         audioSrc = `data:${msg.audio_mime};base64,${msg.audio_base64}`;
       } else {
         const blob = await chatService.speech(msg.text);
         audioSrc = URL.createObjectURL(blob);
+        isBlob = true;
       }
       
       const audio = new window.Audio(audioSrc);
+      globalAudio = audio;
+      
+      const cleanup = () => {
+        setIsPlaying(false);
+        if (isBlob) {
+          URL.revokeObjectURL(audioSrc); // Critical for memory garbage collection
+        }
+      };
+      
+      globalPlaybackCleanup = cleanup;
       
       audio.onplay = () => setIsPlaying(true);
-      audio.onended = () => setIsPlaying(false);
-      audio.onerror = () => setIsPlaying(false);
+      audio.onended = () => {
+        cleanup();
+        if (globalAudio === audio) {
+          globalAudio = null;
+          globalPlaybackCleanup = null;
+        }
+      };
+      audio.onerror = () => {
+        cleanup();
+        if (globalAudio === audio) {
+          globalAudio = null;
+          globalPlaybackCleanup = null;
+        }
+      };
       
       await audio.play();
     } catch (e) {
       console.error("Audio playback failed", e);
       setIsPlaying(false);
+      // Only nullify if the failure was for the current global instance
+      if (globalAudio) {
+        globalAudio = null;
+      }
+      if (globalPlaybackCleanup) {
+        globalPlaybackCleanup = null;
+      }
     } finally {
       setIsLoadingAudio(false);
     }
@@ -71,7 +148,7 @@ export function MessageBubble({ msg }: MessageBubbleProps) {
               className={`ml-2 transition-colors ${
                 isPlaying ? "text-primary animate-pulse" : "hover:text-primary"
               } ${isLoadingAudio ? "opacity-50 cursor-not-allowed" : ""}`}
-              title="Read aloud"
+              title={isPlaying ? "Stop audio" : "Read aloud"}
             >
               {isLoadingAudio ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Volume2 className="w-3.5 h-3.5" />}
             </button>

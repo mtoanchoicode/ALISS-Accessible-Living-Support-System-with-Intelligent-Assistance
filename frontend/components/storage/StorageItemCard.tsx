@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
 import { Video, Package, Loader2, MapPin, Pencil, Trash2 } from "lucide-react";
 
 interface StorageItemCardProps {
@@ -15,46 +14,15 @@ export function StorageItemCard({
   onDelete,
   activeTab,
 }: StorageItemCardProps) {
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-
   return (
     <motion.div
       key={item.id}
+      layout
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, x: -80, transition: { duration: 0.25 } }}
       className="bg-surface p-3 rounded-2xl border border-surface shadow-sm flex items-center space-x-4 active:scale-[0.98] transition-transform duration-200 relative overflow-hidden"
     >
-      <AnimatePresence>
-        {showDeleteConfirm && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-background/95 backdrop-blur-sm z-10 flex flex-col items-center justify-center p-4 text-center rounded-2xl border border-red-500/10"
-          >
-            <p className="text-body font-bold text-sm mb-3">
-              Delete this {item.type}?
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                className="px-4 py-1.5 bg-surface text-muted hover:text-body rounded-xl text-xs font-bold transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  setShowDeleteConfirm(false);
-                  onDelete(item.id);
-                }}
-                className="px-4 py-1.5 bg-red-500 text-white rounded-xl text-xs font-bold shadow-md shadow-red-500/20 hover:bg-red-600 transition-colors"
-              >
-                Delete
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
       <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 bg-background flex items-center justify-center shadow-sm">
         {item.type === "item" ? (
           <img
@@ -154,7 +122,7 @@ export function StorageItemCard({
         {/* Delete Button - Only show for items */}
         {item.type === "item" && (
           <button
-            onClick={() => setShowDeleteConfirm(true)}
+            onClick={() => onDelete(item.id)}
             className="p-2 text-muted hover:text-red-500 bg-background hover:bg-red-500/10 hover:shadow-sm rounded-full transition-all duration-200 shrink-0 outline-none active:scale-95 border border-surface"
           >
             <Trash2 className="w-4 h-4" />
