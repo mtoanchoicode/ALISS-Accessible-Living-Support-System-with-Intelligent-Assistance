@@ -17,15 +17,24 @@ export const videoService = {
     });
   },
 
-  uploadVideo: (name: string, file: File, location?: string): Promise<any> => {
+  uploadVideo: (
+    file_1: File, 
+    file_2: File, 
+    location_1?: string, 
+    location_2?: string
+  ): Promise<any> => {
     const formData = new FormData();
-    formData.append("name", name);
-    formData.append("file", file);
-    if (location) {
-      formData.append("location", location);
+    formData.append("file_1", file_1);
+    formData.append("file_2", file_2);
+    
+    if (location_1) {
+      formData.append("location_1", location_1);
+    }
+    if (location_2) {
+      formData.append("location_2", location_2);
     }
 
-    return apiClient("/videos/upload", {
+    return apiClient("/videos/activity", {
       method: "POST",
       body: formData,
     });
