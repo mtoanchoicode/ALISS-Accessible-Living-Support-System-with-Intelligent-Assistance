@@ -9,9 +9,9 @@ import uuid
 import numpy as np
 from dotenv import load_dotenv
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, Form, UploadFile, BackgroundTasks, Header, HTTPException
+from fastapi import FastAPI, File, Form, Request, UploadFile, BackgroundTasks, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, FileResponse
 from openai import OpenAI
 from PIL import Image
 from pydantic import BaseModel
@@ -214,6 +214,7 @@ def health():
 
 
 app.mount("/images", StaticFiles(directory="memory_images"), name="images")
+
 
 # -------------------------------------------------------------------
 # Context Builder
@@ -798,6 +799,196 @@ async def upload_video_endpoint(
             {"error": f"Video upload sequence failed: {e}"},
             status_code=500
         )
+
+@app.get("/test/activity", include_in_schema=False)
+def test_activity_page():
+    from fastapi.responses import HTMLResponse
+    html = """<!DOCTYPE html>
+<html>
+<head>
+  <title>Activity Processing Test</title>
+  <style>
+    body { font-family: sans-serif; max-width: 900px; margin: 2em auto; padding: 0 1em; }
+    label { display: block; margin-bottom: .5em; }
+    button { margin-top: .5em; padding: .5em 1.5em; cursor: pointer; }
+    #status { margin-top: 1em; color: #555; font-style: italic; }
+    .room-section { margin-top: 1.5em; border: 1px solid #ddd; border-radius: 6px; padding: 1em; }
+    .room-section h3 { margin: 0 0 .5em; }
+    table { border-collapse: collapse; width: 100%; font-size: .9em; }
+    th, td { border: 1px solid #ccc; padding: .4em .7em; text-align: left; }
+    th { background: #f0f0f0; }
+    .video-section { margin-top: 2em; }
+    .video-section h3 { margin-bottom: .5em; }
+    video { width: 100%; max-width: 700px; display: block; margin-bottom: .5em; }
+  </style>
+</head>
+<body>
+  <h2>Activity Processing Test</h2>
+  <form id="form">
+    <label>Video 1: <input type="file" name="file_1" accept="video/*" required></label>
+    <label>Location 1: <input type="text" name="location_1" placeholder="e.g. Living room" required></label>
+    <label>Video 2: <input type="file" name="file_2" accept="video/*" required></label>
+    <label>Location 2: <input type="text" name="location_2" placeholder="e.g. Bed room" required></label>
+    <label>Bearer Token: <input type="text" id="token" placeholder="paste access_token here" style="width:500px"></label>
+    <button type="submit">Process</button>
+  </form>
+
+  <div id="status"></div>
+  <div id="output"></div>
+
+  <script>
+    document.getElementById('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const token = document.getElementById('token').value.trim();
+      document.getElementById('status').textContent = 'Processing... (this may take a few minutes)';
+      document.getElementById('output').innerHTML = '';
+
+      try {
+        const res = await fetch('/videos/activity', {
+          method: 'POST',
+          headers: token ? { Authorization: 'Bearer ' + token } : {},
+          body: fd,
+        });
+        const data = await res.json();
+        document.getElementById('status').textContent = data.error
+          ? 'Error: ' + data.error
+          : 'Completed \u2713';
+
+        if (data.error) return;
+
+        // ── Group events by room ──────────────────────────────────────
+        const byRoom = {};
+        for (const ev of (data.events || [])) {
+          const room = ev.location || 'Unknown';
+          if (!byRoom[room]) byRoom[room] = [];
+          byRoom[room].push(ev);
+        }
+
+        let html = '';
+        for (const [room, events] of Object.entries(byRoom).sort()) {
+          html += '<div class="room-section"><h3>&#128205; ' + room + '</h3>';
+          html += '<table><thead><tr><th>Type</th><th>Person</th><th>Object</th><th>Time</th></tr></thead><tbody>';
+          for (const ev of events) {
+            const type = ev.type === 'start_hold'
+              ? '<span style="color:green">&#9654; start_hold</span>'
+              : '<span style="color:#c00">&#9632; end_hold</span>';
+            html += '<tr><td>' + type + '</td><td>' + ev.person_name + '</td><td>' + ev.object_name + '</td><td>' + ev.time + '</td></tr>';
+          }
+          html += '</tbody></table></div>';
+        }
+
+        // ── Video players + download links ────────────────────────────
+        const videos = [
+          { label: 'Video 1 — ' + (fd.get('location_1') || ''), url: data.video_1_url },
+          { label: 'Video 2 — ' + (fd.get('location_2') || ''), url: data.video_2_url },
+        ];
+        for (const v of videos) {
+          if (!v.url) continue;
+          html += '<div class="video-section">';
+          html += '<h3>' + v.label + '</h3>';
+          html += '<video controls><source src="' + v.url + '" type="video/mp4">Your browser does not support video.</video>';
+          html += '<a href="' + v.url + '" download>&#11015; Download annotated video</a>';
+          html += '</div>';
+        }
+
+        document.getElementById('output').innerHTML = html;
+      } catch (err) {
+        document.getElementById('status').textContent = 'Error: ' + err;
+      }
+    });
+  </script>
+</body>
+</html>"""
+    return HTMLResponse(html)
+
+
+import tempfile
+activity_results: dict = {}  # run_id -> {events, video_1_path, video_2_path}
+
+
+@app.post("/videos/activity")
+async def process_activity_videos(
+    request: Request,
+    file_1: UploadFile = File(...),
+    location_1: str = Form(default="Living room"),
+    file_2: UploadFile = File(...),
+    location_2: str = Form(default="Bed room"),
+):
+    from starlette.concurrency import run_in_threadpool
+    from videos_process import videos_process
+
+    run_id = uuid.uuid4().hex[:8]
+    tmp_in = Path(tempfile.mkdtemp())
+    tmp_out = Path(tempfile.mkdtemp())
+
+    video_path_1 = tmp_in / f"{run_id}_1_{file_1.filename}"
+    video_path_2 = tmp_in / f"{run_id}_2_{file_2.filename}"
+
+    try:
+        video_path_1.write_bytes(await file_1.read())
+        video_path_2.write_bytes(await file_2.read())
+
+        events = await run_in_threadpool(
+            videos_process,
+            video_path_1, location_1,
+            video_path_2, location_2,
+            tmp_out,
+        )
+
+        annotated_1 = tmp_out / f"{video_path_1.stem}_annotated.mp4"
+        annotated_2 = tmp_out / f"{video_path_2.stem}_annotated.mp4"
+
+        activity_results[run_id] = {
+            "events": events,
+            "video_1_path": str(annotated_1),
+            "video_2_path": str(annotated_2),
+        }
+
+        base_url = str(request.base_url).rstrip("/")
+        return JSONResponse(content={
+            "run_id": run_id,
+            "events": events,
+            "video_1_url": f"{base_url}/videos/activity/{run_id}/video/1",
+            "video_2_url": f"{base_url}/videos/activity/{run_id}/video/2",
+        })
+
+    except Exception as e:
+        return JSONResponse({"error": f"Activity processing failed: {e}"}, status_code=500)
+
+    finally:
+        for p in (video_path_1, video_path_2):
+            if p.exists():
+                p.unlink(missing_ok=True)
+        try:
+            tmp_in.rmdir()
+        except Exception:
+            pass
+
+
+@app.get("/videos/activity/{run_id}/video/{n}")
+async def download_activity_video(run_id: str, n: int):
+    result = activity_results.get(run_id)
+    if not result:
+        return JSONResponse({"error": "run_id not found"}, status_code=404)
+    video_path = Path(result.get(f"video_{n}_path", ""))
+    if not video_path.exists():
+        return JSONResponse({"error": "Video not found"}, status_code=404)
+    return FileResponse(str(video_path), media_type="video/mp4", filename=f"annotated_{n}.mp4")
+
+
+@app.get("/videos/activity/{run_id}")
+async def get_activity_result(run_id: str, request: Request):
+    result = activity_results.get(run_id)
+    if not result:
+        return JSONResponse({"error": "run_id not found"}, status_code=404)
+    base_url = str(request.base_url).rstrip("/")
+    return JSONResponse(content={
+        "events": result["events"],
+        "video_1_url": f"{base_url}/videos/activity/{run_id}/video/1",
+        "video_2_url": f"{base_url}/videos/activity/{run_id}/video/2",
+    })
+
 
 @app.delete("/videos/{video_id}")
 async def remove_video(video_id: str):

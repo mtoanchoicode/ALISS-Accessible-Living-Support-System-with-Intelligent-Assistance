@@ -12,3 +12,6 @@ env/
 *.pkl
 
 memory_images/
+
+# Local test page
+test_activity.html
