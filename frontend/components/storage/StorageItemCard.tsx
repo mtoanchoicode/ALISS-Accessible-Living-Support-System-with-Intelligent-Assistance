@@ -105,7 +105,7 @@ export function StorageItemCard({
 
       {/* Action Buttons Group */}
       <div className="flex flex-col gap-2">
-        {/* Edit Button */}
+        {/* Edit Button
         <button
           onClick={() =>
             onEdit(
@@ -117,7 +117,7 @@ export function StorageItemCard({
           className="p-2 text-muted hover:text-primary bg-background hover:bg-surface hover:shadow-sm rounded-full transition-all duration-200 shrink-0 outline-none active:scale-95 border border-surface"
         >
           <Pencil className="w-4 h-4" />
-        </button>
+        </button> */}
 
         {/* Delete Button - Only show for items */}
         {item.type === "item" && (

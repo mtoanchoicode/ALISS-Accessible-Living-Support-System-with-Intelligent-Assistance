@@ -1,7 +1,7 @@
 
 import { getSessionToken, logoutAction } from "@/app/actions/auth";
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://qty-smoking-ext-carpet.trycloudflare.com";
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://0.0.0.0:8000";
 
 export const apiClient = async (
   endpoint: string,
