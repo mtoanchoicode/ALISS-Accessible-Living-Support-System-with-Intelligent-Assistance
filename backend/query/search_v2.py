@@ -344,7 +344,7 @@ class GraphMemoryRetriever:
 class GraphEntityResolver:
     def __init__(self, retriever: GraphMemoryRetriever, model_name: str = EMBED_MODEL_NAME):
         self.retriever = retriever
-        self.model = SentenceTransformer(model_name)
+        self.model = SentenceTransformer(model_name, device="cuda")
         self.catalog: List[Dict[str, Any]] = []
         self.catalog_embeddings: Optional[np.ndarray] = None
         self.build_catalog()

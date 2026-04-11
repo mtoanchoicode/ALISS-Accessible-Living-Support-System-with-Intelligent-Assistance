@@ -20,7 +20,6 @@ export default function Register() {
     showPassword,
     isLoading,
     errorMsg,
-    successMsg,
     formData,
     touched,
     passwordCriteria,
@@ -54,11 +53,6 @@ export default function Register() {
             </div>
           )}
 
-          {successMsg && (
-            <div className="p-3 bg-[#eff6ff] text-[#3F62C7] text-sm rounded-xl border border-[#dbeafe] text-center">
-              {successMsg}
-            </div>
-          )}
 
           {/* First Name & Last Name */}
           <div className="flex gap-4">
@@ -202,7 +196,7 @@ export default function Register() {
 
           <button
             type="submit"
-            disabled={isLoading || successMsg !== ""}
+            disabled={isLoading}
             className="w-full flex justify-center items-center py-3.5 px-4 rounded-xl shadow-sm text-sm font-semibold text-white bg-primary active:scale-95 hover:shadow-md transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-70 mt-4"
           >
             {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Create Account"}
@@ -212,7 +206,7 @@ export default function Register() {
         <p className="mt-8 text-center text-sm text-muted">
           Already have an account?{" "}
           <Link
-            href="/"
+            href="/login"
             className="font-semibold text-primary hover:text-azure transition-colors"
           >
             Sign in

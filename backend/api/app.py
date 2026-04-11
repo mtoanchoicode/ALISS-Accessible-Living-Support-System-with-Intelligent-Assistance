@@ -9,9 +9,9 @@ import uuid
 import numpy as np
 from dotenv import load_dotenv
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, Form, UploadFile, BackgroundTasks, Header, HTTPException
+from fastapi import FastAPI, File, Form, Request, UploadFile, BackgroundTasks, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, FileResponse
 from openai import OpenAI
 from PIL import Image
 from pydantic import BaseModel
@@ -214,6 +214,7 @@ def health():
 
 
 app.mount("/images", StaticFiles(directory="memory_images"), name="images")
+
 
 # -------------------------------------------------------------------
 # Context Builder
@@ -433,104 +434,6 @@ def move_graph_object(
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
-# -------------------------------------------------------------------
-# Chat (+ optional TTS in same response)
-# -------------------------------------------------------------------
-
-# @app.post("/chat")
-# def chat(body: ChatRequest, user = Depends(get_current_user)):
-#     user_msg = body.message.strip()
-#     k = body.k
-
-#     if not user_msg:
-#         return JSONResponse({"error": "Empty message"}, status_code=400)
-
-#     # 1. Connect or Initialize DB Session
-#     session_id = body.session_id
-#     if not session_id:
-#         title = user_msg[:30] + ("..." if len(user_msg) > 30 else "")
-#         new_session = create_session(user["id"], title)
-#         if not new_session:
-#             return JSONResponse({"error": "Failed to create DB session"}, status_code=500)
-#         session_id = new_session["id"]
-        
-#     save_message(session_id, "user", user_msg)
-
-#     # 2. Extract ephemeral contextual memory map
-#     state = SESSIONS[session_id]
-#     state["turn"] = state.get("turn", 0) + 1
-
-#     # retrieval on first turn (or if evidence missing)
-#     if state["turn"] == 1 or not state.get("last_evidence"):
-#         rows = kb_search(user_msg, k=k)
-#         evidence = rows_to_evidence(rows)
-
-#         if not evidence:
-#             state["last_question"] = user_msg
-#             state["last_evidence"] = []
-#             no_record_ans = "I don’t have any records for that yet."
-#             save_message(session_id, "ai", no_record_ans)
-#             return {
-#                 "session_id": session_id,
-#                 "turn": state["turn"],
-#                 "answer": no_record_ans,
-#                 "evidence": [],
-#                 "audio_base64": None,
-#                 "audio_mime": None,
-#             }
-
-#         state["last_question"] = user_msg
-#         state["last_evidence"] = evidence
-
-#     evidence = state["last_evidence"]
-
-#     context = "\n".join(
-#         f"[{e['ts']}] {e['location']} — {e['object']}. {e['background']} (score={e['score']:.3f})"
-#         for e in evidence
-#     )
-
-#     prompt = (
-#         "You are ALISS.\n"
-#         "Use ONLY the evidence below.\n\n"
-#         f"Question: {user_msg}\n\n"
-#         f"EVIDENCE:\n{context}\n\n"
-#         "Answer concisely (1–3 sentences)."
-#     )
-
-#     try:
-#         resp = client.chat.completions.create(
-#             model=OPENAI_MODEL,
-#             messages=[{"role": "user", "content": prompt}],
-#             temperature=0.2,
-#             max_tokens=200,
-#         )
-#         answer_text = resp.choices[0].message.content.strip()
-#     except Exception as e:
-#         answer_text = f"Error generating answer: {e}"
-
-#     audio_b64 = None
-#     audio_mime = None
-#     if body.with_tts and answer_text and not answer_text.startswith("Error generating answer"):
-#         try:
-#             voice = body.tts_voice or TTS_VOICE
-#             mp3 = tts_mp3_bytes(answer_text, voice=voice)
-#             audio_b64 = base64.b64encode(mp3).decode("utf-8")
-#             audio_mime = "audio/mpeg"
-#         except Exception:
-#             audio_b64 = None
-#             audio_mime = None
-
-#     # 3. Finalize DB Pipeline
-#     save_message(session_id, "ai", answer_text)
-
-#     return {
-#         "session_id": session_id,
-#         "turn": state["turn"],
-#         "answer": answer_text,
-#         "evidence": evidence,
-#         "audio_base64": audio_b64,
-#         "audio_mime": audio_mime,
-#     }
 
 # -------------------------------------------------------------------
 # Chat v2 (+ optional TTS in same response)
@@ -741,93 +644,245 @@ async def create_new_video(video_data: dict, user: dict = Depends(get_current_us
     video_data["user_id"] = user["id"]
     return create_video(video_data)
 
-def process_reid_video_background(record_id: str, in_path: str, filename: str):
-    import os
-    try:
-        out_path = f"{in_path}_annotated.mp4"
-        
-        if reid_runner is not None:
-            from pathlib import Path
-            print(f"[Background Worker] Processing video ID: {record_id} via ReID Runner")
-            reid_runner.process_video(Path(in_path), Path(out_path))
-        else:
-            import shutil
-            shutil.copy(in_path, out_path)
+def process_events_first_last(events, memory):
+    import time
 
-        with open(out_path, "rb") as out_f:
-            processed_contents = out_f.read()
+    if not events:
+        return
+
+    # ✅ Sort by time just in case
+    events = sorted(events, key=lambda x: x["time"])
+
+    # Group by object
+    object_events = {}
+
+    for ev in events:
+        obj = ev["object_name"]
+        object_events.setdefault(obj, []).append(ev)
+
+    for obj_name, ev_list in object_events.items():
+        if len(ev_list) < 2:
+            continue
+
+        old_event = ev_list[0]
+        new_event = ev_list[-1]
+
+        old_room = old_event["location"]
+        new_room = new_event["location"]
+        user = new_event.get("person_name")
+
+        if old_room == new_room:
+            continue  # no movement
+
+        updated_nid = memory.update_object(
+            obj_name=obj_name,
+            old_room=old_room,
+            new_room=new_room,
+            old_user_id=user,
+            new_user_id=user,
+            timestamp=time.time()
+        )
+
+        if updated_nid:
+            print(f"[MOVE] {obj_name}: {old_room} → {new_room}")
             
-        print(f"[Background Worker] Uploading Video ID {record_id} to Storage...")
-        storage_res = upload_video_file(processed_contents, filename)
+        save_graph(memory, str(GRAPH_SAVE_PATH))
+
+def process_activity_videos_background(
+    record_1_id: str,
+    record_2_id: str,
+    video_path_1: Path,
+    location_1: str,
+    video_path_2: Path,
+    location_2: str,
+    tmp_out: Path,
+    filename_1: str,
+    filename_2: str
+):
+    from videos_process import videos_process
+    import os
+
+    # 1. Initialize variables early so the `finally` block doesn't crash on error
+    annotated_1 = None
+    annotated_2 = None
+
+    try:
+        print(f"[Background Activity] Starting processing for {record_1_id} and {record_2_id}")
         
-        if storage_res.get("status") == "success":
-            public_url = storage_res["url"]
-            update_video(record_id, {"video_uri": public_url})
-            print(f"[Background Worker] Completed Video ID {record_id}.")
-        else:
-            print(f"Background Upload Error: {storage_res.get('message')}")
-            
+        # Run the heavy processing algorithm
+        events = videos_process(
+            video_path_1, location_1,
+            video_path_2, location_2,
+            tmp_out,
+        )
+        process_events_first_last(events, memory)
+
+        annotated_1 = tmp_out / f"{video_path_1.stem}_annotated.mp4"
+        annotated_2 = tmp_out / f"{video_path_2.stem}_annotated.mp4"
+
+        # Upload Video 1 to Supabase
+        if annotated_1 and annotated_1.exists():
+            with open(annotated_1, "rb") as f1:
+                res1 = upload_video_file(f1.read(), f"annotated_{filename_1}")
+                if res1.get("status") == "success":
+                    update_video(record_1_id, {"video_uri": res1["url"]})
+                else:
+                    update_video(record_1_id, {"video_uri": "error"})
+
+        # Upload Video 2 to Supabase
+        if annotated_2 and annotated_2.exists():
+            with open(annotated_2, "rb") as f2:
+                res2 = upload_video_file(f2.read(), f"annotated_{filename_2}")
+                if res2.get("status") == "success":
+                    update_video(record_2_id, {"video_uri": res2["url"]})
+                else:
+                    update_video(record_2_id, {"video_uri": "error"})
+
+        print("[Background Activity] Upload complete.")
+
+    except SystemExit as e:
+        # Gracefully handle the sys.exit(1) from videos_process
+        print(f"Background activity aborted (Missing model/files): {e}")
+        update_video(record_1_id, {"video_uri": "error"})
+        update_video(record_2_id, {"video_uri": "error"})
     except Exception as e:
-        print(f"Video Processing Background task failed: {e}")
+        print(f"Background activity processing failed: {e}")
+        update_video(record_1_id, {"video_uri": "error"})
+        update_video(record_2_id, {"video_uri": "error"})
+
     finally:
-        if os.path.exists(in_path): os.remove(in_path)
+        # Safely clean up all temporary files
+        for p in (video_path_1, video_path_2, annotated_1, annotated_2):
+            if p and p.exists(): # Checks if 'p' is not None
+                p.unlink(missing_ok=True)
         try:
-            if os.path.exists(out_path): os.remove(out_path)
+            if video_path_1 and video_path_1.parent.exists():
+                video_path_1.parent.rmdir()
+            if tmp_out and tmp_out.exists():
+                tmp_out.rmdir()
         except Exception:
             pass
 
+import tempfile
+activity_results: dict = {}  # run_id -> {events, video_1_path, video_2_path}
 
-@app.post("/videos/upload")
-async def upload_video_endpoint(
+@app.post("/videos/activity")
+async def process_activity_videos(
     background_tasks: BackgroundTasks,
-    name: str = Form(...),
-    file: UploadFile = File(...),
-    user: dict = Depends(get_current_user)
+    request: Request,
+    file_1: UploadFile = File(...),
+    location_1: str = Form(default="Living room"),
+    file_2: UploadFile = File(...),
+    location_2: str = Form(default="Bedroom"),
+    user: dict = Depends(get_current_user) # Added auth to link videos to the user
 ):
     import tempfile
+    import uuid
+    from pathlib import Path
     import os
-    in_path = None
-    try:
-        contents = await file.read()
-        
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as in_tmp:
-            in_tmp.write(contents)
-            in_path = in_tmp.name
-            
-        video_data = {
-            "user_id": user["id"],
-            "name": name,
-            "video_uri": "processing",
-            "source_type": "mobile",
-        }
-        
-        record = create_video(video_data)
-        
-        if isinstance(record, list) and len(record) > 0:
-            record_id = record[0]["id"]
-        elif isinstance(record, dict) and "id" in record:
-            record_id = record["id"]
-        else:
-            record_id = getattr(record, 'id', None)
-            
-        if not record_id:
-            if in_path and os.path.exists(in_path): os.remove(in_path)
-            return JSONResponse(status_code=500, content={"error": "Failed to create DB video abstract"})
 
+    run_id = uuid.uuid4().hex[:8]
+    tmp_in = Path(tempfile.mkdtemp())
+    tmp_out = Path(tempfile.mkdtemp())
+
+    video_path_1 = tmp_in / f"{run_id}_1_{file_1.filename}"
+    video_path_2 = tmp_in / f"{run_id}_2_{file_2.filename}"
+
+    try:
+        # 1. Quickly save incoming files
+        video_path_1.write_bytes(await file_1.read())
+        video_path_2.write_bytes(await file_2.read())
+
+        # 2. Create DB records with "processing" status
+        video_data_1 = {
+            "user_id": user["id"],
+            "name": f"Activity Cam ({location_1})",
+            "video_uri": "processing",
+            "source_type": "cctv", # or "cctv" if these are stationary cameras!
+            "location": location_1   # <--- Mapping perfectly to your DB schema
+        }
+        video_data_2 = {
+            "user_id": user["id"],
+            "name": f"Activity Cam ({location_2})",
+            "video_uri": "processing",
+            "source_type": "cctv", # or "cctv" if these are stationary cameras!
+            "location": location_2   # <--- Mapping perfectly to your DB schema
+        }
+
+        record_1 = create_video(video_data_1)
+        record_2 = create_video(video_data_2)
+
+        # Helper to extract the UUID from the DB creation response
+        def get_id(rec):
+            if isinstance(rec, list) and len(rec) > 0: return rec[0]["id"]
+            elif isinstance(rec, dict) and "id" in rec: return rec["id"]
+            return getattr(rec, 'id', None)
+
+        rec_1_id = get_id(record_1)
+        rec_2_id = get_id(record_2)
+
+        if not rec_1_id or not rec_2_id:
+            raise Exception("Failed to create DB video abstract records")
+
+        # 3. Offload the heavy AI processing and Supabase upload to the background
         background_tasks.add_task(
-            process_reid_video_background,
-            record_id=record_id,
-            in_path=in_path,
-            filename=file.filename
+            process_activity_videos_background,
+            record_1_id=rec_1_id,
+            record_2_id=rec_2_id,
+            video_path_1=video_path_1,
+            location_1=location_1,
+            video_path_2=video_path_2,
+            location_2=location_2,
+            tmp_out=tmp_out,
+            filename_1=file_1.filename,
+            filename_2=file_2.filename
         )
-        
-        return {"saved": True, "record": record}
+
+        # 4. Return immediately so the frontend sees the "processing" loading state
+        return JSONResponse(content={
+            "saved": True,
+            "run_id": run_id,
+            "message": "Videos are processing in the background",
+            "records": [record_1, record_2]
+        })
+
     except Exception as e:
-        if in_path and os.path.exists(in_path): os.remove(in_path)
-        return JSONResponse(
-            {"error": f"Video upload sequence failed: {e}"},
-            status_code=500
-        )
+        # Cleanup files if something fails before the background task starts
+        for p in (video_path_1, video_path_2):
+            if p.exists():
+                p.unlink(missing_ok=True)
+        try:
+            tmp_in.rmdir()
+            tmp_out.rmdir()
+        except Exception:
+            pass
+
+        return JSONResponse({"error": f"Activity processing setup failed: {e}"}, status_code=500)
+
+
+@app.get("/videos/activity/{run_id}/video/{n}")
+async def download_activity_video(run_id: str, n: int):
+    result = activity_results.get(run_id)
+    if not result:
+        return JSONResponse({"error": "run_id not found"}, status_code=404)
+    video_path = Path(result.get(f"video_{n}_path", ""))
+    if not video_path.exists():
+        return JSONResponse({"error": "Video not found"}, status_code=404)
+    return FileResponse(str(video_path), media_type="video/mp4", filename=f"annotated_{n}.mp4")
+
+
+@app.get("/videos/activity/{run_id}")
+async def get_activity_result(run_id: str, request: Request):
+    result = activity_results.get(run_id)
+    if not result:
+        return JSONResponse({"error": "run_id not found"}, status_code=404)
+    base_url = str(request.base_url).rstrip("/")
+    return JSONResponse(content={
+        "events": result["events"],
+        "video_1_url": f"{base_url}/videos/activity/{run_id}/video/1",
+        "video_2_url": f"{base_url}/videos/activity/{run_id}/video/2",
+    })
+
 
 @app.delete("/videos/{video_id}")
 async def remove_video(video_id: str):

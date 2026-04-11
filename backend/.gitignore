@@ -12,3 +12,9 @@ env/
 *.pkl
 
 memory_images/
+
+# Local test page
+test_activity.html
+
+backend/activity_recognition/YOLO26_object.pt
+backend/activity_recognition/YOLO26_pose.pt

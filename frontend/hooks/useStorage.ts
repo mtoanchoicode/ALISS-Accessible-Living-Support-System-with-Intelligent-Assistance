@@ -35,8 +35,13 @@ export function useStorage(isChecking: boolean) {
     });
   };
 
-  const items = rawItems.map((i: any) => ({ ...i, type: "item", id: i.id }));
-  const videos = rawVideos.map((v: any) => ({ ...v, type: "video" }));
+  const items = Array.isArray(rawItems)
+    ? rawItems.map((i: any) => ({ ...i, type: "item", id: i.id }))
+    : [];
+
+  const videos = Array.isArray(rawVideos)
+    ? rawVideos.map((v: any) => ({ ...v, type: "video" }))
+    : [];
 
   const isLoading = itemsLoading || videosLoading;
   const error =
@@ -77,9 +82,13 @@ export function useStorage(isChecking: boolean) {
     }
   };
 
-  const handleDeleteItem = async (id: string) => {
+  const handleDeleteItem = async (id: string, type: "item" | "video") => {
     try {
-      await deleteItemMutation.mutateAsync(id);
+      if (type === "item") {
+        await deleteItemMutation.mutateAsync(id);
+      } else {
+        await deleteVideoMutation.mutateAsync(id);
+      }
     } catch (err) {
       console.error("Failed to delete item:", err);
     }
@@ -96,6 +105,14 @@ export function useStorage(isChecking: boolean) {
     onSuccess: () => {
       // Invalidate the "items" query to refresh the list automatically
       queryClient.invalidateQueries({ queryKey: ["items"] });
+    },
+  });
+
+  const deleteVideoMutation = useMutation({
+    mutationFn: (id: string) => videoService.deleteVideo(id),
+    onSuccess: () => {
+      // Invalidate the "videos" query to refresh the list automatically
+      queryClient.invalidateQueries({ queryKey: ["videos"] });
     },
   });
 
@@ -119,8 +136,17 @@ export function useStorage(isChecking: boolean) {
   });
 
   const uploadVideoMutation = useMutation({
-    mutationFn: ({ name, file, location }: { name: string; file: File; location?: string }) =>
-      videoService.uploadVideo(name, file, location),
+    mutationFn: ({
+      file_1,
+      file_2,
+      location_1,
+      location_2,
+    }: {
+      file_1: File;
+      file_2: File;
+      location_1?: string;
+      location_2?: string;
+    }) => videoService.uploadVideo(file_1, file_2, location_1, location_2),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["videos"] }),
   });
 
@@ -140,10 +166,18 @@ export function useStorage(isChecking: boolean) {
     setEditingItem(null);
   };
 
-  const handleUploadVideo = async (videos: { name: string; file: File; location?: string }[]) => {
-    await Promise.all(
-      videos.map((v) => uploadVideoMutation.mutateAsync({ name: v.name, file: v.file, location: v.location }))
-    );
+  const handleUploadVideo = async (
+    file_1: File,
+    file_2: File,
+    location_1?: string,
+    location_2?: string,
+  ) => {
+    await uploadVideoMutation.mutateAsync({
+      file_1,
+      file_2,
+      location_1,
+      location_2,
+    });
     setIsUploadingVideo(false);
   };
 
