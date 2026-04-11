@@ -230,28 +230,6 @@ def uploadfile_to_bgr_numpy_raw(data: bytes) -> np.ndarray:
     img = Image.open(io.BytesIO(data)).convert("RGB")
     arr = np.array(img)
     return arr[..., ::-1].copy()
-
-# @app.post("/memory")
-# def create_memory(
-#     background_tasks: BackgroundTasks,
-#     obj_name: str = Form(...),
-#     location: str = Form(...),
-#     image: UploadFile = File(...),
-#     model: str = Form("gpt-4o"),
-#     user = Depends(get_current_user),
-# ):
-#     try:
-#         contents = image.file.read()
-#         background_tasks.add_task(
-#             process_memory_background,
-#             contents=contents,
-#             obj_name=obj_name,
-#             location=location,
-#             model=model
-#         )
-#         return JSONResponse({"status": "Processing Memory", "message": "Image queued"}, status_code=202)
-#     except Exception as e:
-#         return JSONResponse({"error": f"Memory creation failed: {e}"}, status_code=500)
     
 def process_memory_v2_background(contents: bytes, obj_name: str, location: str, user_id: str, timestamp: float, image_storage_dir: str):
     try:
@@ -397,6 +375,59 @@ def delete_graph_object(
         return {
             "status": "deleted",
             "node_id": nid
+        }
+
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+    
+class MoveObjectRequest(BaseModel):
+    object_name: str
+    old_room: str
+    new_room: str
+    old_user_id: str
+    new_user_id: str
+
+@app.post("/memoryv2/move-object")
+def move_graph_object(
+    payload: MoveObjectRequest,
+    user = Depends(get_current_user)
+):
+    """
+    Moves an object from one room to another.
+    If the new room or a surface doesn't exist, it creates them.
+    """
+    try:
+        # We use the current user's name and current timestamp
+        # user_id = user.get("first_name", "unknown")
+        timestamp = time.time()
+
+        # Call the logic we implemented in the HomeMemoryGraph class
+        updated_nid = memory.update_object(
+            obj_name=payload.object_name,
+            old_room=payload.old_room,
+            new_room=payload.new_room,
+            old_user_id=payload.old_user_id, # Can represent who reported it moved
+            new_user_id=payload.new_user_id,
+            timestamp=timestamp
+        )
+
+        if not updated_nid:
+            return JSONResponse(
+                {"error": f"Could not find '{payload.object_name}' in '{payload.old_room}'"}, 
+                status_code=404
+            )
+
+        # Persistence: Save the graph state to disk
+        save_graph(memory, str(GRAPH_SAVE_PATH))
+
+        # Retrieve the updated data to return to the frontend
+        node_data = memory.graph.nodes[updated_nid]
+
+        return {
+            "status": "success",
+            "message": f"Moved {payload.object_name} to {payload.new_room}",
+            "node_id": updated_nid,
+            "updated_data": node_data
         }
 
     except Exception as e:

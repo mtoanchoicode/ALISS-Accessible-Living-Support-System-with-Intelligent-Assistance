@@ -267,6 +267,77 @@ class HomeMemoryGraph:
         for u, v, data in self.graph.edges(data=True):
             print(f"{u} -> {v} [{data.get('relation')}]")
 
+    def update_object(self, 
+                      obj_name: str, 
+                      old_room: str, 
+                      new_room: str, 
+                      old_user_id: str, 
+                      new_user_id: str, 
+                      timestamp: float):
+        """
+        Finds an object in its old location and moves it to the new location.
+        Creates the room and a default surface (table) if they don't exist.
+        """
+        # 1. Find the object's current Node ID
+        # We look for an object that is currently in 'old_room'
+        old_room_nid = self.node_id(old_room, "room")
+        obj_nid = None
+        
+        for nid, data in self.graph.nodes(data=True):
+            if data.get("type") == "object" and data.get("name") == normalize_surface(obj_name):
+                # Verify if this specific instance is in the old_room
+                current_room = None
+                for _, surface_target in self.graph.out_edges(nid):
+                    edge_data = self.graph.get_edge_data(nid, surface_target)
+                    if edge_data.get("relation") == "on":
+                        # Surface to Room
+                        for _, room_target in self.graph.out_edges(surface_target):
+                            room_edge = self.graph.get_edge_data(surface_target, room_target)
+                            if room_edge.get("relation") == "in":
+                                current_room = room_target
+                                break
+                
+                if current_room == old_room_nid:
+                    obj_nid = nid
+                    break
+
+        if not obj_nid:
+            print(f"Object '{obj_name}' not found in '{old_room}'.")
+            return None
+
+        # 2. Setup the target location
+        new_room_nid = self._get_or_create_room(new_room)
+        
+        # 3. Find or Create a Surface in the new room
+        # Check if any surfaces already exist in the new room
+        existing_surfaces = []
+        for nid, data in self.graph.nodes(data=True):
+            if data.get("type") == "surface":
+                if self.graph.has_edge(nid, new_room_nid):
+                    existing_surfaces.append(nid)
+        
+        if existing_surfaces:
+            # Put it on the first available surface found
+            target_surface_nid = existing_surfaces[0]
+        else:
+            # Create a default "table" surface as requested
+            target_surface_nid = self._get_or_create_surface("table", new_room_nid, new_user_id, timestamp)
+
+        # 4. Move the object
+        # Remove old 'on' edges
+        self._clear_old_on_edges(obj_nid)
+        
+        # Add new 'on' edge to the surface in the new room
+        self.graph.add_edge(obj_nid, target_surface_nid, relation="on")
+        
+        # 5. Update metadata
+        self.graph.nodes[obj_nid].update({
+            "last_seen": timestamp,
+            "seen_by": new_user_id
+        })
+
+        return obj_nid
+
     def update_node(self, nid: str, updates: Dict[str, Any]) -> bool:
         """Update attributes of an existing node."""
         if nid not in self.graph:
