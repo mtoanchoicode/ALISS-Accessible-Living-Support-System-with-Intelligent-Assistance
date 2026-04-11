@@ -4,6 +4,13 @@ import json
 import sys
 from pathlib import Path
 
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+
+import torch
+torch.use_deterministic_algorithms(True, warn_only=True)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
 from services.reid_service import ReIDConfig, PersonReIDRunner
 from activity_recognition.integration import IntegratedVideoProcessor
 

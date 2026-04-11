@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, Request, UploadFile, BackgroundTasks, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, FileResponse
 from openai import OpenAI
 from PIL import Image
 from pydantic import BaseModel
@@ -215,9 +215,6 @@ def health():
 
 app.mount("/images", StaticFiles(directory="memory_images"), name="images")
 
-ACTIVITY_OUT_DIR = BASE_DIR_TMP / "activity_recognition" / "output"
-ACTIVITY_OUT_DIR.mkdir(parents=True, exist_ok=True)
-app.mount("/activity_output", StaticFiles(directory=str(ACTIVITY_OUT_DIR)), name="activity_output")
 
 # -------------------------------------------------------------------
 # Context Builder
@@ -905,46 +902,91 @@ def test_activity_page():
     return HTMLResponse(html)
 
 
+import tempfile
+activity_results: dict = {}  # run_id -> {events, video_1_path, video_2_path}
+
+
 @app.post("/videos/activity")
 async def process_activity_videos(
     request: Request,
     file_1: UploadFile = File(...),
-    location_1: str = Form(...),
+    location_1: str = Form(default="Living room"),
     file_2: UploadFile = File(...),
-    location_2: str = Form(...),
-    user: dict = Depends(get_current_user),
+    location_2: str = Form(default="Bed room"),
 ):
     from starlette.concurrency import run_in_threadpool
     from videos_process import videos_process
 
-    input_dir = BASE_DIR_TMP / "input"
-    input_dir.mkdir(parents=True, exist_ok=True)
-
     run_id = uuid.uuid4().hex[:8]
-    video_path_1 = input_dir / f"{run_id}_1_{file_1.filename}"
-    video_path_2 = input_dir / f"{run_id}_2_{file_2.filename}"
+    tmp_in = Path(tempfile.mkdtemp())
+    tmp_out = Path(tempfile.mkdtemp())
+
+    video_path_1 = tmp_in / f"{run_id}_1_{file_1.filename}"
+    video_path_2 = tmp_in / f"{run_id}_2_{file_2.filename}"
 
     try:
         video_path_1.write_bytes(await file_1.read())
         video_path_2.write_bytes(await file_2.read())
 
-        result = await run_in_threadpool(
+        events = await run_in_threadpool(
             videos_process,
             video_path_1, location_1,
             video_path_2, location_2,
-            ACTIVITY_OUT_DIR,
+            tmp_out,
         )
 
-        base_url = str(request.base_url).rstrip("/")
-        annotated_1 = f"{video_path_1.stem}_annotated.mp4"
-        annotated_2 = f"{video_path_2.stem}_annotated.mp4"
-        result["video_1_url"] = f"{base_url}/activity_output/{annotated_1}"
-        result["video_2_url"] = f"{base_url}/activity_output/{annotated_2}"
+        annotated_1 = tmp_out / f"{video_path_1.stem}_annotated.mp4"
+        annotated_2 = tmp_out / f"{video_path_2.stem}_annotated.mp4"
 
-        return result
+        activity_results[run_id] = {
+            "events": events,
+            "video_1_path": str(annotated_1),
+            "video_2_path": str(annotated_2),
+        }
+
+        base_url = str(request.base_url).rstrip("/")
+        return JSONResponse(content={
+            "run_id": run_id,
+            "events": events,
+            "video_1_url": f"{base_url}/videos/activity/{run_id}/video/1",
+            "video_2_url": f"{base_url}/videos/activity/{run_id}/video/2",
+        })
 
     except Exception as e:
         return JSONResponse({"error": f"Activity processing failed: {e}"}, status_code=500)
+
+    finally:
+        for p in (video_path_1, video_path_2):
+            if p.exists():
+                p.unlink(missing_ok=True)
+        try:
+            tmp_in.rmdir()
+        except Exception:
+            pass
+
+
+@app.get("/videos/activity/{run_id}/video/{n}")
+async def download_activity_video(run_id: str, n: int):
+    result = activity_results.get(run_id)
+    if not result:
+        return JSONResponse({"error": "run_id not found"}, status_code=404)
+    video_path = Path(result.get(f"video_{n}_path", ""))
+    if not video_path.exists():
+        return JSONResponse({"error": "Video not found"}, status_code=404)
+    return FileResponse(str(video_path), media_type="video/mp4", filename=f"annotated_{n}.mp4")
+
+
+@app.get("/videos/activity/{run_id}")
+async def get_activity_result(run_id: str, request: Request):
+    result = activity_results.get(run_id)
+    if not result:
+        return JSONResponse({"error": "run_id not found"}, status_code=404)
+    base_url = str(request.base_url).rstrip("/")
+    return JSONResponse(content={
+        "events": result["events"],
+        "video_1_url": f"{base_url}/videos/activity/{run_id}/video/1",
+        "video_2_url": f"{base_url}/videos/activity/{run_id}/video/2",
+    })
 
 
 @app.delete("/videos/{video_id}")
